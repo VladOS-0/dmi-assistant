@@ -10,6 +10,7 @@ use iced::{
     Element, Length, Task,
 };
 use iced_aw::TabLabel;
+use walkdir::WalkDir;
 
 use crate::{
     dmi_utils::load_dmi, icon, screens::Screen, utils::bold_text, wrap,
@@ -113,19 +114,55 @@ impl Screen for ExtractorScreen {
                     Task::none()
                 }
                 iced::window::Event::FileDropped(path) => {
-                    let file: PathBuf = path
+                    let path: PathBuf = path
                         .to_str()
                         .unwrap_or("FAILED TO RESOLVE FILE")
                         .to_owned()
                         .into();
-                    if screen.loading_dmis.contains(&file)
-                        || screen.parsed_dmis.contains_key(&file)
+
+                    let dummy = PathBuf::new();
+
+                    if path.is_dir() {
+                        return Task::batch(
+                            WalkDir::new(path)
+                                .max_depth(20)
+                                .into_iter()
+                                .filter_map(|entry| {
+                                    entry
+                                        .and_then(|entry| {
+                                            {
+                                                entry.metadata().map(
+                                                    |metadata| {
+                                                        if metadata.is_file() {
+                                                            entry
+                                                                .path()
+                                                                .to_path_buf()
+                                                        } else {
+                                                            dummy.clone()
+                                                        }
+                                                    },
+                                                )
+                                            }
+                                        })
+                                        .ok()
+                                })
+                                .map(|path| {
+                                    Task::done(wrap![
+                                        ExtractorMessage::LoadDMI(
+                                            path.to_path_buf()
+                                        )
+                                    ])
+                                }),
+                        );
+                    }
+                    if screen.loading_dmis.contains(&path)
+                        || screen.parsed_dmis.contains_key(&path)
                     {
                         return Task::none();
                     }
-                    screen.loading_dmis.insert(file.clone());
+                    screen.loading_dmis.insert(path.clone());
                     screen.hovered_file = false;
-                    Task::done(wrap![ExtractorMessage::LoadDMI(file)])
+                    Task::done(wrap![ExtractorMessage::LoadDMI(path)])
                 }
 
                 _ => Task::none(),

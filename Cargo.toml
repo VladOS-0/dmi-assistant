@@ -16,6 +16,7 @@ image = "0.25.5"
 log = "0.4.22"
 rfd = "0.15.1"
 thiserror = "2.0.6"
+walkdir = "2.5.0"
 
 [build-dependencies]
 iced_fontello = "0.13.1"
