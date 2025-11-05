@@ -6,14 +6,14 @@ use std::{
 
 use arboard::Clipboard;
 use iced::{
-    widget::{button, column, container, row, text, Column},
+    widget::{button, column, container, row, scrollable, text, Column, Space},
     Element, Length, Task,
 };
 use iced_aw::TabLabel;
 
 use crate::{
-    dmi_utils::load_dmi, screens::Screen, utils::bold_text, wrap, DMIAssistant,
-    Message,
+    dmi_utils::load_dmi, icon, screens::Screen, utils::bold_text, wrap,
+    DMIAssistant, Message,
 };
 
 #[derive(Debug, Clone)]
@@ -21,6 +21,7 @@ pub enum ExtractorMessage {
     LoadDMI(PathBuf),
     DMILoaded((PathBuf, Result<Vec<String>, String>)),
     CopyDMI(PathBuf),
+    CopyText(String),
     ClearAll,
 }
 
@@ -86,6 +87,10 @@ impl Screen for ExtractorScreen {
                     let _ = Clipboard::new().unwrap().set_text(states);
                     Task::none()
                 }
+                ExtractorMessage::CopyText(text) => {
+                    let _ = Clipboard::new().unwrap().set_text(text);
+                    Task::none()
+                }
                 ExtractorMessage::ClearAll => {
                     screen.parsed_dmis.clear();
                     screen.loading_dmis.clear();
@@ -133,7 +138,7 @@ impl Screen for ExtractorScreen {
          *
          */
         if screen.hovered_file {
-            return container("Drop 'em!'")
+            return container("You can release the mouse now, y\'now")
                 .style(container::bordered_box)
                 .padding(50)
                 .center_x(Length::Fill)
@@ -142,9 +147,17 @@ impl Screen for ExtractorScreen {
         }
 
         if !screen.loading_dmis.is_empty() {
+            let mut tooltip =
+                format!("Loading ({})...\n\n", screen.loading_dmis.len());
+            for dmi in &screen.loading_dmis {
+                tooltip += &dmi.to_string_lossy();
+                tooltip += "\n";
+            }
             let tooltip = column!(
-                text!("Loading ({})...", screen.loading_dmis.len()),
-                button("Abort").on_press(wrap![ExtractorMessage::ClearAll])
+                text(tooltip),
+                button(row![icon::trash(), text(" Abort")])
+                    .on_press(wrap![ExtractorMessage::ClearAll])
+                    .style(button::danger)
             );
             return container(tooltip)
                 .style(container::bordered_box)
@@ -168,22 +181,40 @@ impl Screen for ExtractorScreen {
         for (path, dmi) in &screen.parsed_dmis {
             let mut dmi_states_column: Column<Message> = Column::new();
             for state in dmi {
-                dmi_states_column = dmi_states_column.push(text!("{}", state))
+                dmi_states_column = dmi_states_column.push(row![
+                    text!("{}", state),
+                    button(row![icon::save(), text(" Copy")])
+                        .on_press(wrap![ExtractorMessage::CopyText(
+                            state.clone()
+                        )])
+                        .style(button::secondary)
+                ])
             }
             parsed_dmis_column = parsed_dmis_column.push(container(column![
-                bold_text(path.to_string_lossy()),
+                row![
+                    bold_text(path.to_string_lossy()),
+                    button(row![icon::save(), text(" Copy Path")])
+                        .on_press(wrap![ExtractorMessage::CopyText(
+                            path.to_string_lossy().to_string()
+                        )])
+                        .style(button::secondary)
+                ],
                 dmi_states_column,
-                button("Copy")
+                button(row![icon::save(), text(" Copy All")])
                     .on_press(wrap![ExtractorMessage::CopyDMI(path.clone())])
+                    .style(button::secondary),
+                Space::with_height(20)
             ]));
         }
-        container(column![
+        container(scrollable(column![
             row![
                 bold_text("Parsed:    "),
-                button("Clear").on_press(wrap![ExtractorMessage::ClearAll])
+                button(row![icon::trash(), text(" Clear All")])
+                    .on_press(wrap![ExtractorMessage::ClearAll])
+                    .style(button::danger)
             ],
             parsed_dmis_column
-        ])
+        ]))
         .center_x(Length::Fill)
         .center_y(Length::Fill)
         .into()
