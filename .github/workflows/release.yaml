@@ -45,9 +45,9 @@ jobs:
           mkdir -p release-assets
 
           if [ "${{ matrix.target }}" = "x86_64-pc-windows-gnu" ]; then
-            EXECUTABLE_NAME="discord_watchdog.exe"
+            EXECUTABLE_NAME="DMIAssistant.exe"
           else
-            EXECUTABLE_NAME="discord_watchdog"
+            EXECUTABLE_NAME="DMIAssistant"
           fi
 
           cp target/${{ matrix.target }}/release/$EXECUTABLE_NAME release-assets/
@@ -71,9 +71,9 @@ jobs:
           cp README.md LICENSE-APACHE LICENSE-MIT release-assets/
 
           if [ "${{ matrix.target }}" = "x86_64-pc-windows-gnu" ]; then
-            ARCHIVE_NAME="discord_watchdog-windows-x86_64.zip"
+            ARCHIVE_NAME="DMIAssistant-windows-x86_64.zip"
           else
-            ARCHIVE_NAME="discord_watchdog-linux-x86_64.zip"
+            ARCHIVE_NAME="DMIAssistant-linux-x86_64.zip"
           fi
 
           (cd release-assets && zip -r ../$ARCHIVE_NAME ./)
@@ -85,7 +85,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}-release
-          path: ${{ github.workspace }}/discord_watchdog-*.zip
+          path: ${{ github.workspace }}/DMIAssistant-*.zip
 
   create-release:
     name: Create Release
@@ -116,8 +116,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/x86_64-unknown-linux-gnu-release/discord_watchdog-linux-x86_64.zip
-          asset_name: discord_watchdog-linux-x86_64.zip
+          asset_path: ./artifacts/x86_64-unknown-linux-gnu-release/DMIAssistant-linux-x86_64.zip
+          asset_name: DMIAssistant-linux-x86_64.zip
           asset_content_type: application/zip
 
       - name: Upload Release Assets
@@ -126,6 +126,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/x86_64-pc-windows-gnu-release/discord_watchdog-windows-x86_64.zip
-          asset_name: discord_watchdog-windows-x86_64.zip
+          asset_path: ./artifacts/x86_64-pc-windows-gnu-release/DMIAssistant-windows-x86_64.zip
+          asset_name: DMIAssistant-windows-x86_64.zip
           asset_content_type: application/zip
