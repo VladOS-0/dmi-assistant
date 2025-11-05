@@ -1,14 +1,12 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    os::linux::raw::stat,
     path::PathBuf,
     time::Instant,
 };
 
 use arboard::Clipboard;
 use iced::{
-    advanced::graphics::text::cosmic_text::ttf_parser::apple_layout::class,
-    widget::{button, column, container, text, Column, Container},
+    widget::{button, column, container, row, text, Column},
     Element, Length, Task,
 };
 use iced_aw::TabLabel;
@@ -23,6 +21,7 @@ pub enum ExtractorMessage {
     LoadDMI(PathBuf),
     DMILoaded((PathBuf, Result<Vec<String>, String>)),
     CopyDMI(PathBuf),
+    ClearAll,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -87,6 +86,11 @@ impl Screen for ExtractorScreen {
                     let _ = Clipboard::new().unwrap().set_text(states);
                     Task::none()
                 }
+                ExtractorMessage::ClearAll => {
+                    screen.parsed_dmis.clear();
+                    screen.loading_dmis.clear();
+                    Task::none()
+                }
             }
         } else {
             if let Message::Window(_id, event) = message {
@@ -140,7 +144,10 @@ impl Screen for ExtractorScreen {
         }
 
         if !screen.loading_dmis.is_empty() {
-            let tooltip = text!("Loading ({})...", screen.loading_dmis.len());
+            let tooltip = column!(
+                text!("Loading ({})...", screen.loading_dmis.len()),
+                button("Abort").on_press(wrap![ExtractorMessage::ClearAll])
+            );
             return container(tooltip)
                 .style(|theme| container::bordered_box(theme))
                 .padding(50)
@@ -172,9 +179,15 @@ impl Screen for ExtractorScreen {
                     .on_press(wrap![ExtractorMessage::CopyDMI(path.clone())])
             ]));
         }
-        container(column![bold_text("Parsed:"), parsed_dmis_column])
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .into()
+        container(column![
+            row![
+                bold_text("Parsed:    "),
+                button("Clear").on_press(wrap![ExtractorMessage::ClearAll])
+            ],
+            parsed_dmis_column
+        ])
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .into()
     }
 }
