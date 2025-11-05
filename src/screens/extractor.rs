@@ -123,6 +123,7 @@ impl Screen for ExtractorScreen {
                     let dummy = PathBuf::new();
 
                     if path.is_dir() {
+                        screen.hovered_file = false;
                         return Task::batch(
                             WalkDir::new(path)
                                 .max_depth(20)
