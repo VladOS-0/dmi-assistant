@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::path::PathBuf;
 use std::time::Instant;
 
 use arboard::Clipboard;
@@ -165,7 +164,7 @@ impl Screen for DebuggerScreen {
                         .add_filter("dmi", &["dmi"])
                         .set_directory("/")
                         .pick_file()
-                        .unwrap_or(PathBuf::new())
+                        .unwrap_or_default()
                         .to_str()
                         .unwrap_or("")
                         .to_string();
@@ -290,23 +289,20 @@ impl Screen for DebuggerScreen {
                                 image_bytes = Vec::new();
                             }
                         }
-                    } else {
-                        if original {
-                            let icon = state
-                                .get_original_frame(&direction, frame.unwrap());
-                            if let Some(image) = icon {
-                                image_bytes = image.clone().into_bytes();
-                            } else {
-                                image_bytes = Vec::new();
-                            }
+                    } else if original {
+                        let icon = state
+                            .get_original_frame(&direction, frame.unwrap());
+                        if let Some(image) = icon {
+                            image_bytes = image.clone().into_bytes();
                         } else {
-                            let icon =
-                                state.get_frame(&direction, frame.unwrap());
-                            if let Some(image) = icon {
-                                image_bytes = image.clone().into_bytes();
-                            } else {
-                                image_bytes = Vec::new();
-                            }
+                            image_bytes = Vec::new();
+                        }
+                    } else {
+                        let icon = state.get_frame(&direction, frame.unwrap());
+                        if let Some(image) = icon {
+                            image_bytes = image.clone().into_bytes();
+                        } else {
+                            image_bytes = Vec::new();
                         }
                     }
                     if image_bytes.is_empty() {
@@ -334,31 +330,29 @@ impl Screen for DebuggerScreen {
                     Task::none()
                 }
             }
-        } else {
-            if let Message::Window(_id, event) = message {
-                match event {
-                    iced::window::Event::FileHovered(_) => {
-                        screen.hovered_file = true;
-                        Task::none()
-                    }
-                    iced::window::Event::FilesHoveredLeft => {
-                        screen.hovered_file = false;
-                        Task::none()
-                    }
-                    iced::window::Event::FileDropped(path) => {
-                        screen.dmi_path = path
-                            .to_str()
-                            .unwrap_or("FAILED TO RESOLVE FILE")
-                            .to_owned();
-                        screen.hovered_file = false;
-                        Task::done(wrap![DebuggerMessage::LoadDMI])
-                    }
-
-                    _ => Task::none(),
+        } else if let Message::Window(_id, event) = message {
+            match event {
+                iced::window::Event::FileHovered(_) => {
+                    screen.hovered_file = true;
+                    Task::none()
                 }
-            } else {
-                Task::none()
+                iced::window::Event::FilesHoveredLeft => {
+                    screen.hovered_file = false;
+                    Task::none()
+                }
+                iced::window::Event::FileDropped(path) => {
+                    screen.dmi_path = path
+                        .to_str()
+                        .unwrap_or("FAILED TO RESOLVE FILE")
+                        .to_owned();
+                    screen.hovered_file = false;
+                    Task::done(wrap![DebuggerMessage::LoadDMI])
+                }
+
+                _ => Task::none(),
             }
+        } else {
+            Task::none()
         }
     }
 
@@ -371,7 +365,7 @@ impl Screen for DebuggerScreen {
          */
         if screen.hovered_file {
             return container("Drop your file here")
-                .style(|theme| container::bordered_box(theme))
+                .style(container::bordered_box)
                 .padding(50)
                 .center_x(Length::Fill)
                 .center_y(Length::Fill)
@@ -380,7 +374,7 @@ impl Screen for DebuggerScreen {
 
         if screen.loading_dmi_in_progress {
             return container(text!("Loading {}...", screen.dmi_path))
-                .style(|theme| container::bordered_box(theme))
+                .style(container::bordered_box)
                 .padding(50)
                 .center_x(Length::Fill)
                 .center_y(Length::Fill)
@@ -467,23 +461,20 @@ impl Screen for DebuggerScreen {
                     .label("Debug Info")
                     .on_toggle(|state| {
                         wrap![DebuggerMessage::ToggleDebug(state)]
-                    })
-                    .into();
+                    });
 
             let animated_toggler: Toggler<Message> =
                 toggler(screen.display_settings.statebox_default.animated)
                     .label("Animated View")
                     .on_toggle(|state| {
                         wrap![DebuggerMessage::ToggleAnimated(state)]
-                    })
-                    .into();
+                    });
             let resizing_display_toggler: Toggler<Message> =
                 toggler(screen.display_settings.statebox_default.show_resized)
                     .label("Show resized images")
                     .on_toggle(|state| {
                         wrap![DebuggerMessage::ToggleResizeDisplay(state)]
-                    })
-                    .into();
+                    });
             let resize_toggler: Toggler<Message> = toggler(
                 screen.display_settings.statebox_default.resize
                     != StateboxResizing::Original,
@@ -499,8 +490,7 @@ impl Screen for DebuggerScreen {
                         StateboxResizing::Original
                     )]
                 }
-            })
-            .into();
+            });
             let resize_picker = match screen
                 .display_settings
                 .statebox_default
@@ -653,8 +643,8 @@ impl DebuggerScreen {
         let display: Grid<Message> = {
             let mut dirs: VecDeque<GridRow<Message>> = state
                 .dirs
-                .iter()
-                .map(|(direction, _)| {
+                .keys()
+                .map(|direction| {
                     let mut row: GridRow<Message> = GridRow::default();
                     row = row.push(text(direction.to_string()));
                     if settings.animated {
@@ -665,14 +655,14 @@ impl DebuggerScreen {
                                 state.get_original_animated(direction)
                             }
                         };
-                        if animated.is_some() {
-                            let gif = Gif::new(&animated.unwrap().frames);
+                        if let Some(gif) = animated {
+                            let gif = Gif::new(&gif.frames);
                             let gif = button(gif)
                                 .on_press(wrap![DebuggerMessage::CopyImage(
                                     state.name.clone(),
                                     true,
                                     settings.show_resized,
-                                    direction.clone(),
+                                    *direction,
                                     None
                                 )])
                                 .style(|_theme, _status| button::Style {
@@ -693,8 +683,7 @@ impl DebuggerScreen {
                                     )
                                 }
                             };
-                            if icon.is_some() {
-                                let icon = icon.unwrap();
+                            if let Some(icon) = icon {
                                 let image_widget: Image = Image::new(
                                     iced::widget::image::Handle::from_rgba(
                                         icon.width(),
@@ -708,7 +697,7 @@ impl DebuggerScreen {
                                             state.name.clone(),
                                             false,
                                             settings.show_resized,
-                                            direction.clone(),
+                                            *direction,
                                             Some(frame as usize)
                                         )
                                     ])
@@ -758,19 +747,10 @@ impl DebuggerScreen {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct DisplaySettings {
     pub statebox_default: StateboxSettings,
     pub unique_stateboxes: HashMap<String, StateboxSettings>,
-}
-
-impl Default for DisplaySettings {
-    fn default() -> Self {
-        Self {
-            statebox_default: StateboxSettings::default(),
-            unique_stateboxes: HashMap::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

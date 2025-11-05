@@ -92,38 +92,36 @@ impl Screen for ExtractorScreen {
                     Task::none()
                 }
             }
-        } else {
-            if let Message::Window(_id, event) = message {
-                match event {
-                    iced::window::Event::FileHovered(_) => {
-                        screen.hovered_file = true;
-                        Task::none()
-                    }
-                    iced::window::Event::FilesHoveredLeft => {
-                        screen.hovered_file = false;
-                        Task::none()
-                    }
-                    iced::window::Event::FileDropped(path) => {
-                        let file: PathBuf = path
-                            .to_str()
-                            .unwrap_or("FAILED TO RESOLVE FILE")
-                            .to_owned()
-                            .into();
-                        if screen.loading_dmis.get(&file).is_some()
-                            || screen.parsed_dmis.get(&file).is_some()
-                        {
-                            return Task::none();
-                        }
-                        screen.loading_dmis.insert(file.clone());
-                        screen.hovered_file = false;
-                        Task::done(wrap![ExtractorMessage::LoadDMI(file)])
-                    }
-
-                    _ => Task::none(),
+        } else if let Message::Window(_id, event) = message {
+            match event {
+                iced::window::Event::FileHovered(_) => {
+                    screen.hovered_file = true;
+                    Task::none()
                 }
-            } else {
-                Task::none()
+                iced::window::Event::FilesHoveredLeft => {
+                    screen.hovered_file = false;
+                    Task::none()
+                }
+                iced::window::Event::FileDropped(path) => {
+                    let file: PathBuf = path
+                        .to_str()
+                        .unwrap_or("FAILED TO RESOLVE FILE")
+                        .to_owned()
+                        .into();
+                    if screen.loading_dmis.contains(&file)
+                        || screen.parsed_dmis.contains_key(&file)
+                    {
+                        return Task::none();
+                    }
+                    screen.loading_dmis.insert(file.clone());
+                    screen.hovered_file = false;
+                    Task::done(wrap![ExtractorMessage::LoadDMI(file)])
+                }
+
+                _ => Task::none(),
             }
+        } else {
+            Task::none()
         }
     }
 
@@ -136,7 +134,7 @@ impl Screen for ExtractorScreen {
          */
         if screen.hovered_file {
             return container("Drop 'em!'")
-                .style(|theme| container::bordered_box(theme))
+                .style(container::bordered_box)
                 .padding(50)
                 .center_x(Length::Fill)
                 .center_y(Length::Fill)
@@ -149,7 +147,7 @@ impl Screen for ExtractorScreen {
                 button("Abort").on_press(wrap![ExtractorMessage::ClearAll])
             );
             return container(tooltip)
-                .style(|theme| container::bordered_box(theme))
+                .style(container::bordered_box)
                 .padding(50)
                 .center_x(Length::Fill)
                 .center_y(Length::Fill)
@@ -158,7 +156,7 @@ impl Screen for ExtractorScreen {
 
         if screen.parsed_dmis.is_empty() {
             return container(column![bold_text("Drop your files there!")])
-                .style(|theme| container::bordered_box(theme))
+                .style(container::bordered_box)
                 .padding(50)
                 .center_x(Length::Fill)
                 .center_y(Length::Fill)

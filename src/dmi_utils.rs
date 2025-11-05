@@ -37,7 +37,7 @@ pub fn load_and_save_dmi(
     let icon = load_dmi(input_file)?;
     for state in icon.states {
         if &state.name == name {
-            if let Some(image) = state.images.get(0) {
+            if let Some(image) = state.images.first() {
                 image
                     .as_rgba8()
                     .ok_or(DMIParsingError::ErrorRGBA)?

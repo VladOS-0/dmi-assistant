@@ -201,22 +201,22 @@ impl ParsedState {
         dir: &Directions,
         frame: usize,
     ) -> Option<&DynamicImage> {
-        self.dirs.get(&dir)?.get_frame(frame)
+        self.dirs.get(dir)?.get_frame(frame)
     }
     pub fn get_original_frame(
         &self,
         dir: &Directions,
         frame: usize,
     ) -> Option<&DynamicImage> {
-        self.dirs.get(&dir)?.get_original_frame(frame)
+        self.dirs.get(dir)?.get_original_frame(frame)
     }
 
     pub fn get_animated(&self, dir: &Directions) -> Option<&Animated> {
-        self.dirs.get(&dir)?.get_animated()
+        self.dirs.get(dir)?.get_animated()
     }
 
     pub fn get_original_animated(&self, dir: &Directions) -> Option<&Animated> {
-        self.dirs.get(&dir)?.get_original_animated()
+        self.dirs.get(dir)?.get_original_animated()
     }
 }
 
@@ -260,9 +260,9 @@ impl DirImage {
         }
         let animated =
             animate(original_frames.clone(), &loop_flag, &state.delay)
-                .or_else(|err| {
+                .map_err(|err| {
                     eprintln!("{err}");
-                    Err(err)
+                    err
                 })
                 .ok();
         let animated = match animated {
@@ -283,9 +283,9 @@ impl DirImage {
                     .collect();
                 let resized_animated =
                     animate(resized_frames.clone(), &loop_flag, &state.delay)
-                        .or_else(|err| {
+                        .map_err(|err| {
                             eprintln!("{err}");
-                            Err(err)
+                            err
                         })
                         .ok();
                 let resized_animated = match resized_animated {
@@ -319,9 +319,9 @@ impl DirImage {
                     .collect();
                 let resized_animated =
                     animate(resized_frames.clone(), &loop_flag, delay)
-                        .or_else(|err| {
+                        .map_err(|err| {
                             eprintln!("{err}");
-                            Err(err)
+                            err
                         })
                         .ok();
                 let resized_animated = match resized_animated {
@@ -336,21 +336,21 @@ impl DirImage {
 
     pub fn get_frame(&self, frame: usize) -> Option<&DynamicImage> {
         if let Some(frames) = &self.resized_frames {
-            return frames.get(frame);
+            frames.get(frame)
         } else {
-            return self.original_frames.get(frame);
+            self.original_frames.get(frame)
         }
     }
 
     pub fn get_original_frame(&self, frame: usize) -> Option<&DynamicImage> {
-        return self.original_frames.get(frame);
+        self.original_frames.get(frame)
     }
 
     pub fn get_animated(&self) -> Option<&Animated> {
         if let Some(animated) = &self.resized_animated {
-            return Some(animated);
+            Some(animated)
         } else {
-            return self.original_animated.as_ref();
+            self.original_animated.as_ref()
         }
     }
 
