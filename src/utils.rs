@@ -11,8 +11,29 @@ use iced::{
     },
     Font,
 };
+use iced_toasts::{toast, ToastLevel};
 use image::codecs::gif::{GifEncoder, Repeat};
 use image::{Delay, DynamicImage, ImageError};
+
+use crate::Message;
+
+pub fn popup<T: AsRef<str>>(
+    text: T,
+    custom_header: Option<&str>,
+    level: ToastLevel,
+) -> Message {
+    Message::PushToast(
+        toast(text.as_ref())
+            .title(custom_header.unwrap_or(match level {
+                ToastLevel::Info => "Info",
+                ToastLevel::Success => "Success",
+                ToastLevel::Warning => "Warning",
+                ToastLevel::Error => "Error",
+            }))
+            .level(level)
+            .into(),
+    )
+}
 
 pub fn cleanup() {
     let _ = fs::remove_dir_all("temp");

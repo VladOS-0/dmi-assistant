@@ -356,7 +356,7 @@ impl Screen for ViewerScreen {
         }
     }
 
-    fn view(app: &DMIAssistant) -> Element<'_, Message> {
+    fn view<'a>(app: &'a DMIAssistant) -> Element<'a, Message> {
         let screen = &app.viewer_screen;
         /*
          *

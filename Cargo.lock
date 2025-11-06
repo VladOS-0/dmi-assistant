@@ -1202,6 +1202,7 @@ dependencies = [
  "iced_fontello",
  "iced_fonts",
  "iced_gif",
+ "iced_toasts",
  "image 0.25.6",
  "log",
  "rfd",
@@ -2249,6 +2250,15 @@ dependencies = [
  "rustc-hash 2.1.1",
  "softbuffer",
  "tiny-skia",
+]
+
+[[package]]
+name = "iced_toasts"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7867fa2bb9dafb59831baa27987fcc9c75969f2909953fb6848cab940f0e456"
+dependencies = [
+ "iced",
 ]
 
 [[package]]

@@ -14,12 +14,16 @@ use iced::{
     Element, Length, Task,
 };
 use iced_aw::TabLabel;
+use iced_toasts::ToastLevel;
 use rfd::FileDialog;
 use walkdir::WalkDir;
 
 use crate::{
-    dmi_utils::load_dmi, icon, screens::Screen, utils::bold_text, wrap,
-    DMIAssistant, Message,
+    dmi_utils::load_dmi,
+    icon,
+    screens::Screen,
+    utils::{bold_text, popup},
+    wrap, DMIAssistant, Message,
 };
 
 #[derive(Debug, Clone)]
@@ -84,7 +88,15 @@ impl Screen for ExtractorScreen {
                     if let Err(err) = loaded {
                         eprintln!("{err}");
                         screen.loading_dmis.remove(&path);
-                        return Task::none();
+                        return Task::done(popup(
+                            format!(
+                                "Failed to load DMI: {}; Reason: {}",
+                                path.to_string_lossy(),
+                                err
+                            ),
+                            Some("Load failed"),
+                            ToastLevel::Warning,
+                        ));
                     }
                     if screen.loading_dmis.remove(&path) {
                         screen
@@ -92,7 +104,11 @@ impl Screen for ExtractorScreen {
                             .insert(path.clone(), loaded.unwrap());
                     }
 
-                    Task::none()
+                    Task::done(popup(
+                        format!("Loaded {}", path.to_string_lossy(),),
+                        Some("Loaded DMI"),
+                        ToastLevel::Success,
+                    ))
                 }
                 ExtractorMessage::CopyDMI(path) => {
                     let states = screen
@@ -101,20 +117,39 @@ impl Screen for ExtractorScreen {
                         .unwrap_or(&Vec::new())
                         .join(", ");
                     let _ = Clipboard::new().unwrap().set_text(states);
-                    Task::none()
+                    Task::done(popup(
+                        "All states were copied",
+                        Some("Copied"),
+                        ToastLevel::Success,
+                    ))
                 }
                 ExtractorMessage::CopyText(text) => {
                     let _ = Clipboard::new().unwrap().set_text(text);
-                    Task::none()
+                    Task::done(popup(
+                        "Text was copied",
+                        Some("Copied"),
+                        ToastLevel::Success,
+                    ))
                 }
                 ExtractorMessage::RemoveDMI(path) => {
                     screen.parsed_dmis.remove(&path);
-                    Task::none()
+                    Task::done(popup(
+                        format!(
+                            "{} was removed from extractor",
+                            path.to_string_lossy()
+                        ),
+                        Some("Removed"),
+                        ToastLevel::Success,
+                    ))
                 }
                 ExtractorMessage::ClearAll => {
                     screen.parsed_dmis.clear();
                     screen.loading_dmis.clear();
-                    Task::none()
+                    Task::done(popup(
+                        "Extractor was cleared",
+                        Some("Removed All"),
+                        ToastLevel::Success,
+                    ))
                 }
                 ExtractorMessage::ChangeInputDMIPath(new_string) => {
                     screen.path_in_input = new_string;
@@ -260,7 +295,7 @@ impl Screen for ExtractorScreen {
         }
     }
 
-    fn view(app: &DMIAssistant) -> Element<'_, Message> {
+    fn view<'a>(app: &'a DMIAssistant) -> Element<'a, Message> {
         let screen = &app.extractor_screen;
 
         /*
@@ -297,7 +332,7 @@ impl Screen for ExtractorScreen {
 
         let button_file_explorer =
             button(row![icon::iconfile(), text(" Browse Files")])
-                .on_press(wrap![ExtractorMessage::OpenedFileExplorer(true)]);
+                .on_press(wrap![ExtractorMessage::OpenedFileExplorer(false)]);
 
         let button_folder_explorer =
             button(row![icon::folder(), text(" Browse Folders")])

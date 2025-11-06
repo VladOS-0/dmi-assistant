@@ -38,5 +38,5 @@ pub trait Screen {
     fn update(_app: &mut DMIAssistant, _message: Message) -> Task<Message> {
         Task::none()
     }
-    fn view(app: &DMIAssistant) -> Element<'_, Message>;
+    fn view<'a>(app: &'a DMIAssistant) -> Element<'a, Message>;
 }
