@@ -69,18 +69,24 @@ pub fn get_project_dir(dir_type: Directories) -> PathBuf {
 }
 
 pub fn prepare_dirs(config: &Config) {
-    let cache_dir = &config.cache_dir;
     // Better safe then sorry
-    if cache_dir.ends_with("/home")
-        || cache_dir.to_string_lossy() == "/"
-        || cache_dir.to_string_lossy() == ""
+    if config.cache_dir.ends_with("/home")
+        || config.log_dir.to_string_lossy().len() < 5
     {
         panic!(
             "cache_dir is set to {} and is probably to dangerous to remove",
-            cache_dir.to_string_lossy()
+            config.cache_dir.to_string_lossy()
         );
     }
-    let _ = fs::remove_dir_all(cache_dir);
+    if config.log_dir.ends_with("/home")
+        || config.log_dir.to_string_lossy().len() < 5
+    {
+        panic!(
+            "log_dir is set to {} and is probably to dangerous to remove",
+            config.log_dir.to_string_lossy()
+        );
+    }
+    let _ = fs::remove_dir_all(&config.cache_dir);
     fs::create_dir_all(&config.cache_dir).unwrap();
     fs::create_dir_all(&config.data_dir).unwrap();
 
@@ -121,18 +127,17 @@ pub fn prepare_dirs(config: &Config) {
 }
 
 pub fn cleanup(config: &Config) {
-    let cache_dir = &config.cache_dir;
     // Better safe then sorry
-    if cache_dir.ends_with("/home")
-        || cache_dir.to_string_lossy() == "/"
-        || cache_dir.to_string_lossy() == ""
+    if config.cache_dir.ends_with("/home")
+        || config.cache_dir.to_string_lossy() == "/"
+        || config.cache_dir.to_string_lossy() == ""
     {
         panic!(
             "cache_dir is set to {} and is probably to dangerous to remove",
-            cache_dir.to_string_lossy()
+            config.cache_dir.to_string_lossy()
         );
     }
-    let _ = fs::remove_dir_all(cache_dir);
+    let _ = fs::remove_dir_all(&config.cache_dir);
 }
 
 pub fn placeholder_widget() -> Image {
