@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use dmi::icon::{Icon, IconState, Looping};
 use iced_gif::Frames;
-use image::{imageops::FilterType, DynamicImage};
+use image::{DynamicImage, imageops::FilterType};
+use log::error;
 
 use crate::{
     dmi_utils::Directions, screens::viewer::StateboxResizing, utils::animate,
@@ -241,14 +242,17 @@ impl DirImage {
         let mut original_frames: Vec<DynamicImage> =
             Vec::with_capacity(frame_num as usize);
 
-        for frame in 0..frame_num {
+        for frame_index in 0..frame_num {
             // I was forced to write it, because dmi crate's get_image is broken
             // All hail stupidity
-            let frame = state
-                .images
-                .get(direction as usize + frame as usize * state.dirs as usize);
+            let frame = state.images.get(
+                direction as usize + frame_index as usize * state.dirs as usize,
+            );
             if frame.is_none() {
-                eprintln!("{frame:?}");
+                error!(
+                    "[DMI LOADING] Failed to get frame with index {} from state {}",
+                    frame_index, state.name
+                );
                 break;
             }
             let frame: &DynamicImage = frame.unwrap();
@@ -261,7 +265,10 @@ impl DirImage {
         let animated =
             animate(original_frames.clone(), &loop_flag, &state.delay)
                 .map_err(|err| {
-                    eprintln!("{err}");
+                    error!(
+                        "[DMI LOADING] Failed to animate state {}: {}",
+                        state.name, err
+                    );
                     err
                 })
                 .ok();
@@ -281,13 +288,19 @@ impl DirImage {
                     .iter()
                     .map(|frame| frame.resize(*width, *height, filter_type))
                     .collect();
-                let resized_animated =
-                    animate(resized_frames.clone(), &loop_flag, &state.delay)
-                        .map_err(|err| {
-                            eprintln!("{err}");
-                            err
-                        })
-                        .ok();
+                let resized_animated = animate(
+                    resized_frames.clone(),
+                    &loop_flag,
+                    &state.delay,
+                )
+                .map_err(|err| {
+                    error!(
+                        "[DMI LOADING] Failed to animate resized (to {}:{}) state {}: {}",
+                        height, width, state.name, err
+                    );
+                    err
+                })
+                .ok();
                 let resized_animated = match resized_animated {
                     Some(vec) => Animated::new(vec).ok(),
                     None => None,
@@ -320,7 +333,10 @@ impl DirImage {
                 let resized_animated =
                     animate(resized_frames.clone(), &loop_flag, delay)
                         .map_err(|err| {
-                            eprintln!("{err}");
+                            error!(
+                        "[DMI LOADING] Failed to animate resized (to {}:{}) DirImage: {}",
+                        height, width, err
+                    );
                             err
                         })
                         .ok();

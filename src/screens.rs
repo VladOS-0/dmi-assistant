@@ -3,7 +3,7 @@ use iced_aw::TabLabel;
 
 use crate::{DMIAssistant, Message};
 
-pub mod extractor;
+pub mod explorer;
 pub mod viewer;
 
 /// Wrapping a screen's Message into the app's Message. Screen's message enum and variant in app's message enum must have the
@@ -29,7 +29,7 @@ macro_rules! wrap {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum Screens {
     #[default]
-    Extractor,
+    Explorer,
     Viewer,
 }
 

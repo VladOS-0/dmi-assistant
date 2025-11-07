@@ -7,28 +7,32 @@ use std::{
 
 use arboard::Clipboard;
 use iced::{
+    Element, Length, Task,
+    alignment::Vertical,
+    color,
     keyboard::{Key, Modifiers},
     widget::{
-        button, column, container, row, scrollable, text, text_input, Column,
-        Container, Space, Text, TextInput,
+        Column, Container, Space, TextInput, button, column, container,
+        rich_text, row, scrollable, span, text, text_input,
     },
-    Element, Length, Task,
 };
 use iced_aw::TabLabel;
 use iced_toasts::ToastLevel;
+use log::{debug, error};
 use rfd::FileDialog;
 use walkdir::WalkDir;
 
 use crate::{
+    DMIAssistant, Message,
     dmi_utils::load_dmi,
     icon,
     screens::Screen,
     utils::{bold_text, popup},
-    wrap, DMIAssistant, Message,
+    wrap,
 };
 
 #[derive(Debug, Clone)]
-pub enum ExtractorMessage {
+pub enum ExplorerMessage {
     ChangeInputDMIPath(String),
     OpenedFileExplorer(bool),
     LoadDMI(PathBuf),
@@ -42,7 +46,7 @@ pub enum ExtractorMessage {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct ExtractorScreen {
+pub struct ExplorerScreen {
     hovered_file: bool,
     path_in_input: String,
     loading_dmis: BTreeSet<PathBuf>,
@@ -51,16 +55,16 @@ pub struct ExtractorScreen {
     filter_opened: bool,
 }
 
-impl ExtractorScreen {
-    fn filter_view<'a>(screen: &ExtractorScreen) -> Container<'a, Message> {
+impl ExplorerScreen {
+    fn filter_view<'a>(screen: &ExplorerScreen) -> Container<'a, Message> {
         if screen.filter_opened {
             container(
                 text_input("Enter text to find...", &screen.filtered_text)
                     .on_input(|input| {
-                        wrap![ExtractorMessage::ChangeFilteredText(input)]
+                        wrap![ExplorerMessage::ChangeFilteredText(input)]
                     })
                     .on_paste(|input| {
-                        wrap![ExtractorMessage::ChangeFilteredText(input)]
+                        wrap![ExplorerMessage::ChangeFilteredText(input)]
                     })
                     .padding(10),
             )
@@ -72,13 +76,13 @@ impl ExtractorScreen {
     }
 }
 
-impl Screen for ExtractorScreen {
+impl Screen for ExplorerScreen {
     fn label(&self) -> TabLabel {
-        TabLabel::IconText('\u{1F4BE}', " Statename Extractor".to_string())
+        TabLabel::IconText('\u{1F50D}', " Explorer".to_string())
     }
 
     fn update(app: &mut DMIAssistant, message: Message) -> Task<Message> {
-        let screen = &mut app.extractor_screen;
+        let screen = &mut app.explorer_screen;
         match message {
             Message::Window(_id, event) => match event {
                 iced::window::Event::FileHovered(_) => {
@@ -127,11 +131,9 @@ impl Screen for ExtractorScreen {
                                     path.extension() == Some(OsStr::new("dmi"))
                                 })
                                 .map(|path| {
-                                    Task::done(wrap![
-                                        ExtractorMessage::LoadDMI(
-                                            path.to_path_buf()
-                                        )
-                                    ])
+                                    Task::done(wrap![ExplorerMessage::LoadDMI(
+                                        path.to_path_buf()
+                                    )])
                                 }),
                         );
                     }
@@ -141,19 +143,18 @@ impl Screen for ExtractorScreen {
                         return Task::none();
                     }
                     screen.hovered_file = false;
-                    Task::done(wrap![ExtractorMessage::LoadDMI(path)])
+                    Task::done(wrap![ExplorerMessage::LoadDMI(path)])
                 }
 
                 _ => Task::none(),
             },
 
             Message::Keyboard(key, modifiers) => {
-                println!("{:?} {:?}", key, modifiers);
                 if modifiers.contains(Modifiers::CTRL)
                     && (key == Key::Character("f".into())
                         || key == Key::Character("F".into()))
                 {
-                    return Task::done(wrap![ExtractorMessage::ToggleFilter(
+                    return Task::done(wrap![ExplorerMessage::ToggleFilter(
                         !screen.filter_opened
                     )]);
                 }
@@ -161,15 +162,15 @@ impl Screen for ExtractorScreen {
                 Task::none()
             }
 
-            Message::ExtractorMessage(extractor_message) => {
-                match extractor_message {
-                    ExtractorMessage::LoadDMI(path) => {
+            Message::ExplorerMessage(explorer_message) => {
+                match explorer_message {
+                    ExplorerMessage::LoadDMI(path) => {
                         screen.loading_dmis.insert(path.clone());
                         Task::future(async move {
                             let load_start = Instant::now();
                             let opened_dmi = load_dmi(path.clone());
                             if opened_dmi.is_err() {
-                                return wrap![ExtractorMessage::DMILoaded((
+                                return wrap![ExplorerMessage::DMILoaded((
                                     path,
                                     Err(format!("{}", opened_dmi.unwrap_err()),)
                                 ))];
@@ -182,19 +183,24 @@ impl Screen for ExtractorScreen {
                                 .map(|state| state.name.clone())
                                 .collect();
 
-                            println!(
-                                "DMI parsed in {}ms",
+                            debug!(
+                                "DMI {} parsed in {}ms",
+                                path.to_string_lossy(),
                                 load_start.elapsed().as_millis()
                             );
-                            wrap![ExtractorMessage::DMILoaded((
+                            wrap![ExplorerMessage::DMILoaded((
                                 path,
                                 Ok(existing_states)
                             ))]
                         })
                     }
-                    ExtractorMessage::DMILoaded((path, loaded)) => {
+                    ExplorerMessage::DMILoaded((path, loaded)) => {
                         if let Err(err) = loaded {
-                            eprintln!("{err}");
+                            error!(
+                                "Failed to load DMI {}; Reason: {}",
+                                path.to_string_lossy(),
+                                err
+                            );
                             screen.loading_dmis.remove(&path);
                             return Task::done(popup(
                                 format!(
@@ -218,7 +224,7 @@ impl Screen for ExtractorScreen {
                             ToastLevel::Success,
                         ))
                     }
-                    ExtractorMessage::CopyDMI(path) => {
+                    ExplorerMessage::CopyDMI(path) => {
                         let states = screen
                             .parsed_dmis
                             .get(&path)
@@ -231,7 +237,7 @@ impl Screen for ExtractorScreen {
                             ToastLevel::Success,
                         ))
                     }
-                    ExtractorMessage::CopyText(text) => {
+                    ExplorerMessage::CopyText(text) => {
                         let _ = Clipboard::new().unwrap().set_text(text);
                         Task::done(popup(
                             "Text was copied",
@@ -239,31 +245,31 @@ impl Screen for ExtractorScreen {
                             ToastLevel::Success,
                         ))
                     }
-                    ExtractorMessage::RemoveDMI(path) => {
+                    ExplorerMessage::RemoveDMI(path) => {
                         screen.parsed_dmis.remove(&path);
                         Task::done(popup(
                             format!(
-                                "{} was removed from extractor",
+                                "{} was removed from explorer",
                                 path.to_string_lossy()
                             ),
                             Some("Removed"),
                             ToastLevel::Success,
                         ))
                     }
-                    ExtractorMessage::ClearAll => {
+                    ExplorerMessage::ClearAll => {
                         screen.parsed_dmis.clear();
                         screen.loading_dmis.clear();
                         Task::done(popup(
-                            "Extractor was cleared",
+                            "Explorer was cleared",
                             Some("Removed All"),
                             ToastLevel::Success,
                         ))
                     }
-                    ExtractorMessage::ChangeInputDMIPath(new_string) => {
+                    ExplorerMessage::ChangeInputDMIPath(new_string) => {
                         screen.path_in_input = new_string;
                         Task::none()
                     }
-                    ExtractorMessage::OpenedFileExplorer(browse_dirs) => {
+                    ExplorerMessage::OpenedFileExplorer(browse_dirs) => {
                         let files = if browse_dirs {
                             FileDialog::new()
                                 .set_title("Open folders with DMIs")
@@ -314,27 +320,27 @@ impl Screen for ExtractorScreen {
                                             })
                                             .map(|path| {
                                                 Task::done(wrap![
-                                                    ExtractorMessage::LoadDMI(
+                                                    ExplorerMessage::LoadDMI(
                                                         path.to_path_buf()
                                                     )
                                                 ])
                                             }),
                                     )
                                 } else {
-                                    Task::done(wrap![
-                                        ExtractorMessage::LoadDMI(path)
-                                    ])
+                                    Task::done(wrap![ExplorerMessage::LoadDMI(
+                                        path
+                                    )])
                                 }
                             }))
                         } else {
                             Task::none()
                         }
                     }
-                    ExtractorMessage::ChangeFilteredText(new_text) => {
+                    ExplorerMessage::ChangeFilteredText(new_text) => {
                         screen.filtered_text = new_text;
                         Task::none()
                     }
-                    ExtractorMessage::ToggleFilter(status) => {
+                    ExplorerMessage::ToggleFilter(status) => {
                         screen.filter_opened = status;
                         Task::none()
                     }
@@ -345,7 +351,7 @@ impl Screen for ExtractorScreen {
     }
 
     fn view<'a>(app: &'a DMIAssistant) -> Element<'a, Message> {
-        let screen = &app.extractor_screen;
+        let screen = &app.explorer_screen;
 
         /*
          *
@@ -364,47 +370,49 @@ impl Screen for ExtractorScreen {
         let input_path: TextInput<Message> =
             text_input("Input DMI path", &screen.path_in_input)
                 .on_input(|input| {
-                    wrap![ExtractorMessage::ChangeInputDMIPath(input)]
+                    wrap![ExplorerMessage::ChangeInputDMIPath(input)]
                 })
                 .on_paste(|input| {
-                    wrap![ExtractorMessage::ChangeInputDMIPath(input)]
+                    wrap![ExplorerMessage::ChangeInputDMIPath(input)]
                 })
-                .on_submit(wrap![ExtractorMessage::LoadDMI(
+                .on_submit(wrap![ExplorerMessage::LoadDMI(
                     screen.path_in_input.clone().into()
                 )])
                 .padding(10);
 
         let button_search = button(row![icon::search(), text(" Filter")])
-            .on_press(wrap![ExtractorMessage::ToggleFilter(
+            .on_press(wrap![ExplorerMessage::ToggleFilter(
                 !screen.filter_opened
             )]);
 
         let button_load = button(row![icon::open(), text(" Open File")])
-            .on_press(wrap![ExtractorMessage::LoadDMI(
+            .on_press(wrap![ExplorerMessage::LoadDMI(
                 screen.path_in_input.clone().into()
             )]);
 
         let button_file_explorer =
             button(row![icon::iconfile(), text(" Browse Files")])
-                .on_press(wrap![ExtractorMessage::OpenedFileExplorer(false)]);
+                .on_press(wrap![ExplorerMessage::OpenedFileExplorer(false)]);
 
         let button_folder_explorer =
             button(row![icon::folder(), text(" Browse Folders")])
-                .on_press(wrap![ExtractorMessage::OpenedFileExplorer(true)]);
+                .on_press(wrap![ExplorerMessage::OpenedFileExplorer(true)]);
 
         let clear_all = button(row![icon::trash(), text(" Clear All")])
-            .on_press(wrap![ExtractorMessage::ClearAll])
+            .on_press(wrap![ExplorerMessage::ClearAll])
             .style(button::danger);
 
         let input_controls = row![
             input_path,
-            button_search,
-            clear_all,
             button_load,
             button_file_explorer,
             button_folder_explorer
         ]
+        .align_y(Vertical::Center)
         .spacing(5);
+
+        let output_controls =
+            row![button_search, clear_all].padding(5).spacing(5);
 
         if !screen.loading_dmis.is_empty() {
             let mut tooltip =
@@ -413,7 +421,7 @@ impl Screen for ExtractorScreen {
                 tooltip += &dmi.to_string_lossy();
                 tooltip += "\n";
             }
-            let tooltip = column!(text(tooltip));
+            let tooltip = text(tooltip);
             return container(
                 column![
                     input_controls,
@@ -434,7 +442,7 @@ impl Screen for ExtractorScreen {
                 column![
                     input_controls,
                     container(bold_text(
-                        ".. or drop your icon files or folders there!"
+                        "... or drop your icon files or folders there!"
                     ))
                     .style(container::bordered_box)
                     .padding(50)
@@ -443,7 +451,7 @@ impl Screen for ExtractorScreen {
                 ]
                 .spacing(10),
             )
-            .padding(50)
+            .padding(20)
             .into();
         }
 
@@ -463,18 +471,22 @@ impl Screen for ExtractorScreen {
                     filter_selected_this_state = true;
                 }
                 if filter_selected_dmi || filter_selected_this_state {
-                    let selected_mark: Text =
-                        text(if filter_selected_this_state {
-                            "✅  "
-                        } else if screen.filtered_text.is_empty() {
-                            ""
+                    let selected_mark: text::Rich<Message> =
+                        if screen.filtered_text.is_empty() {
+                            rich_text([span("")])
+                        } else if filter_selected_this_state {
+                            rich_text([span("+  ")
+                                .color(color!(0x89fc41))
+                                .size(20)])
                         } else {
-                            "❌️  "
-                        });
+                            rich_text([span("-  ")
+                                .color(color!(0xfc4144))
+                                .size(20)])
+                        };
                     dmi_states_column = dmi_states_column.push(row![
                         row![selected_mark, text!("{}  ", state)],
                         button(icon::save())
-                            .on_press(wrap![ExtractorMessage::CopyText(
+                            .on_press(wrap![ExplorerMessage::CopyText(
                                 state.clone()
                             )])
                             .style(button::secondary)
@@ -482,44 +494,47 @@ impl Screen for ExtractorScreen {
                 }
             }
             if filter_selected_state || filter_selected_dmi {
-                let selected_mark: Text = text(if filter_selected_dmi {
-                    "✅  "
-                } else if screen.filtered_text.is_empty() {
-                    ""
+                let selected_mark: text::Rich<Message> = if screen
+                    .filtered_text
+                    .is_empty()
+                {
+                    rich_text([span("")])
+                } else if filter_selected_dmi {
+                    rich_text([span("+  ").color(color!(0x89fc41)).size(20)])
                 } else {
-                    "❌️  "
-                });
+                    rich_text([span("-  ").color(color!(0xfc4144)).size(20)])
+                };
                 parsed_dmis_column =
                     parsed_dmis_column.push(container(column![
+                        row![selected_mark, bold_text(path.to_string_lossy())],
                         row![
-                            selected_mark,
-                            bold_text(path.to_string_lossy()),
                             button(row![icon::save(), text(" Copy All")])
-                                .on_press(wrap![ExtractorMessage::CopyDMI(
+                                .on_press(wrap![ExplorerMessage::CopyDMI(
                                     path.clone()
                                 )]),
                             button(row![icon::save(), text(" Copy Path")])
-                                .on_press(wrap![ExtractorMessage::CopyText(
+                                .on_press(wrap![ExplorerMessage::CopyText(
                                     path.to_string_lossy().to_string()
                                 )])
                                 .style(button::secondary),
                             button(row![icon::trash(), text(" Clear")])
-                                .on_press(wrap![ExtractorMessage::RemoveDMI(
+                                .on_press(wrap![ExplorerMessage::RemoveDMI(
                                     path.clone()
                                 )])
                                 .style(button::danger),
                         ]
                         .spacing(4),
                         dmi_states_column,
-                        Space::with_height(40)
+                        Space::with_height(20)
                     ]));
             }
         }
         container(scrollable(
             column![
                 input_controls,
-                ExtractorScreen::filter_view(screen),
-                Space::with_height(50),
+                output_controls,
+                ExplorerScreen::filter_view(screen),
+                Space::with_height(10),
                 row![bold_text("Parsed:    "), Space::with_height(20)],
                 parsed_dmis_column
             ]

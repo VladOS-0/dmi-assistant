@@ -1,20 +1,48 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::{env, fs, panic, path::Path};
+
+use chrono::Local;
 use dmi_assistant::{
-    icon::FONT,
-    utils::{cleanup, init_temp},
-    DMIAssistant, Message, DEFAULT_THEME,
+    DEFAULT_THEME, DMIAssistant, Message, config::Config, icon::FONT,
+    utils::prepare_dirs,
 };
+use dotenv::dotenv;
 use iced::{
+    Font, Size, Subscription, Task,
     advanced::graphics::image::image_rs::ImageFormat,
     font, keyboard,
     window::{self, icon::from_file_data},
-    Font, Size, Subscription,
 };
+use log::{LevelFilter, error, info};
+
+const DEFAULT_APP_LOG_LEVEL: LevelFilter = LevelFilter::Info;
+const DEFAULT_LIBS_LOG_LEVEL: LevelFilter = LevelFilter::Error;
 
 pub fn main() -> iced::Result {
-    cleanup();
-    init_temp();
+    dotenv().ok();
+    let config = Config::load();
+    fs::create_dir_all(&config.log_dir).unwrap();
+    setup_logger(&config.log_dir).expect("Logger initialization failed");
+    prepare_dirs(&config);
+    panic::set_hook(Box::new(|err| {
+        error!(
+            "[THREAD PANICKED!] Location: {} | Payload: {}",
+            err.location()
+                .map(|loc| { loc.to_string() })
+                .unwrap_or("UNKNOWN".to_string()),
+            err.payload().downcast_ref::<String>().unwrap()
+        );
+    }));
+
+    info!(
+        "\n\n----------------------{} v{}----------------------\n\n",
+        env!("CARGO_CRATE_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
+
+    info!("Config is: {:?}", &config.log_dir);
+
     iced::application("DMI assistant", DMIAssistant::update, DMIAssistant::view)
         .theme(|_| DEFAULT_THEME)
         .subscription(subscription)
@@ -26,6 +54,7 @@ pub fn main() -> iced::Result {
         })
         .window(window::Settings {
             size: Size::new(1500.0, 900.0),
+            position: window::Position::Centered,
             decorations: true,
             icon: from_file_data(
                 include_bytes!("../assets/images/icon.png"),
@@ -36,8 +65,8 @@ pub fn main() -> iced::Result {
             ..Default::default()
         })
         .font(FONT)
-        .font(iced_fonts::REQUIRED_FONT_BYTES)
-        .run()
+        .font(iced_fonts::NERD_FONT_BYTES)
+        .run_with(|| (DMIAssistant::new(config), Task::none()))
 }
 
 fn subscription(_state: &DMIAssistant) -> Subscription<Message> {
@@ -56,4 +85,34 @@ pub fn settings() -> iced::Settings {
         antialiasing: true,
         ..Default::default()
     }
+}
+
+fn setup_logger<T: AsRef<Path>>(log_dir: &T) -> Result<(), fern::InitError> {
+    let app_log_level: LevelFilter = env::var("APP_LOG_LEVEL")
+        .unwrap_or_default()
+        .parse()
+        .unwrap_or(DEFAULT_APP_LOG_LEVEL);
+    let libs_log_level: LevelFilter = env::var("LIBS_LOG_LEVEL")
+        .unwrap_or_default()
+        .parse()
+        .unwrap_or(DEFAULT_LIBS_LOG_LEVEL);
+    let log_file_name =
+        format!("{}.log", Local::now().format("%Y-%m-%d-%H-%M-%S"));
+
+    fern::Dispatch::new()
+        .format(move |out, message, record| {
+            out.finish(format_args!(
+                "[{}] ({}) {} - {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                record.target(),
+                record.level(),
+                message
+            ))
+        })
+        .level_for(env!("CARGO_CRATE_NAME"), app_log_level)
+        .level(libs_log_level)
+        .chain(std::io::stdout())
+        .chain(fern::log_file(log_dir.as_ref().join(log_file_name))?)
+        .apply()?;
+    Ok(())
 }

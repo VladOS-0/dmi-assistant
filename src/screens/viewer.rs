@@ -6,8 +6,24 @@ use std::time::Instant;
 use arboard::Clipboard;
 use arboard::ImageData;
 use dmi::icon::Icon;
+use iced::Alignment;
+use iced::Background;
+use iced::Border;
+use iced::Color;
+use iced::Element;
+use iced::Length;
+use iced::Shadow;
+use iced::Task;
 use iced::alignment::Horizontal;
+use iced::alignment::Vertical;
 use iced::border::Radius;
+use iced::widget::Button;
+use iced::widget::Column;
+use iced::widget::Container;
+use iced::widget::Image;
+use iced::widget::Scrollable;
+use iced::widget::Space;
+use iced::widget::Toggler;
 use iced::widget::button;
 use iced::widget::column;
 use iced::widget::container;
@@ -20,43 +36,32 @@ use iced::widget::scrollable::Scrollbar;
 use iced::widget::text;
 use iced::widget::text_input;
 use iced::widget::toggler;
-use iced::widget::Button;
-use iced::widget::Column;
-use iced::widget::Container;
-use iced::widget::Image;
-use iced::widget::Scrollable;
-use iced::widget::Space;
-use iced::widget::Toggler;
-use iced::Alignment;
-use iced::Background;
-use iced::Border;
-use iced::Color;
-use iced::Element;
-use iced::Length;
-use iced::Shadow;
-use iced::Task;
-use iced_aw::color_picker;
 use iced_aw::ColorPicker;
 use iced_aw::Grid;
 use iced_aw::GridRow;
 use iced_aw::NumberInput;
 use iced_aw::TabLabel;
 use iced_aw::Wrap;
+use iced_aw::color_picker;
 use iced_gif::Gif;
+use iced_toasts::ToastLevel;
 use image::imageops::FilterType;
+use log::debug;
+use log::warn;
 use rfd::FileDialog;
 
 use super::Screen;
 
-use crate::dmi_model::ParsedDMI;
-use crate::dmi_utils::load_dmi;
-use crate::dmi_utils::CustomFilterType;
-use crate::dmi_utils::Directions;
-use crate::icon;
-use crate::utils::bold_text;
-use crate::wrap;
 use crate::DMIAssistant;
 use crate::Message;
+use crate::dmi_model::ParsedDMI;
+use crate::dmi_utils::CustomFilterType;
+use crate::dmi_utils::Directions;
+use crate::dmi_utils::load_dmi;
+use crate::icon;
+use crate::utils::bold_text;
+use crate::utils::popup;
+use crate::wrap;
 
 #[derive(Debug, Clone)]
 pub enum ViewerMessage {
@@ -99,7 +104,7 @@ pub struct ViewerScreen {
 
 impl Screen for ViewerScreen {
     fn label(&self) -> TabLabel {
-        TabLabel::IconText('\u{270E}', " DMI Viewer".to_string())
+        TabLabel::IconText('\u{F1C5}', " Viewer".to_string())
     }
 
     fn update(app: &mut DMIAssistant, message: Message) -> Task<Message> {
@@ -125,7 +130,7 @@ impl Screen for ViewerScreen {
 
                     Task::future(async move {
                         let load_start = Instant::now();
-                        let opened_dmi = load_dmi(path);
+                        let opened_dmi = load_dmi(&path);
                         if opened_dmi.is_err() {
                             return wrap![ViewerMessage::DMILoaded(Err(
                                 format!("{}", opened_dmi.unwrap_err())
@@ -138,8 +143,9 @@ impl Screen for ViewerScreen {
                             resize,
                             filter_type,
                         );
-                        println!(
-                            "DMI parsed in {}ms",
+                        debug!(
+                            "DMI {} parsed in {}ms",
+                            path,
                             load_start.elapsed().as_millis()
                         );
                         wrap![ViewerMessage::DMILoaded(Ok((
@@ -149,15 +155,23 @@ impl Screen for ViewerScreen {
                 }
                 ViewerMessage::DMILoaded(result) => {
                     if let Err(err) = result {
-                        eprintln!("{err}");
+                        warn!("[VIEWER] Failed to load DMI: {err}");
                         screen.loading_dmi_in_progress = false;
-                        return Task::none();
+                        return Task::done(popup(
+                            format!("Failed to load DMI: {}", err),
+                            Some("Failed to load DMI"),
+                            ToastLevel::Error,
+                        ));
                     }
                     let (raw, parsed) = result.unwrap();
                     screen.dmi_raw_icon = raw;
                     screen.parsed_dmi = parsed;
                     screen.loading_dmi_in_progress = false;
-                    Task::none()
+                    Task::done(popup(
+                        "Successfully loaded DMI",
+                        Some("Loaded"),
+                        ToastLevel::Success,
+                    ))
                 }
                 ViewerMessage::OpenedFileExplorer => {
                     let file = FileDialog::new()
@@ -255,7 +269,18 @@ impl Screen for ViewerScreen {
                             .unwrap_or_default()
                             .into(),
                     );
-                    Task::none()
+                    Task::done(popup(
+                        format!(
+                            "Performed resize to {:#?} with filter {:#?}",
+                            screen.display_settings.statebox_default.resize,
+                            screen
+                                .display_settings
+                                .statebox_default
+                                .filter_type
+                        ),
+                        Some("Resized"),
+                        ToastLevel::Success,
+                    ))
                 }
 
                 ViewerMessage::CopyImage(
@@ -327,7 +352,11 @@ impl Screen for ViewerScreen {
                         bytes: Cow::Borrowed(&image_bytes),
                     });
 
-                    Task::none()
+                    Task::done(popup(
+                        "Copied image to the clipboard",
+                        Some("Copied"),
+                        ToastLevel::Success,
+                    ))
                 }
             }
         } else if let Message::Window(_id, event) = message {
@@ -396,18 +425,20 @@ impl Screen for ViewerScreen {
                 .on_press(wrap![ViewerMessage::LoadDMI]);
 
         let button_explorer: Button<Message> =
-            button(row![icon::iconfile(), text(" Open Explorer")])
+            button(row![icon::iconfile(), text(" Browse Files")])
                 .on_press(wrap![ViewerMessage::OpenedFileExplorer]);
-        let settings_button: Button<Message> =
-            button(row![icon::settings(), text(" Settings")]).on_press(wrap![
-                ViewerMessage::ToggleSettingsVisibility(
-                    !screen.settings_visible
-                )
-            ]);
 
-        let control_bar = row![button_load, button_explorer, settings_button]
-            .spacing(10)
-            .padding(5);
+        let settings_button: Button<Message> = button(icon::settings())
+            .on_press(wrap![ViewerMessage::ToggleSettingsVisibility(
+                !screen.settings_visible
+            )]);
+
+        let input_bar =
+            row![settings_button, input_path, button_load, button_explorer]
+                .spacing(10)
+                .align_y(Vertical::Center)
+                .padding(5);
+
         /*
          *
          * SETTINGS
@@ -583,10 +614,9 @@ impl Screen for ViewerScreen {
             states_wrap = states_wrap.push(screen.display_statebox(state.0))
         }
 
-        let column =
-            column![input_path, control_bar, settings_bar, states_wrap]
-                .padding(10)
-                .spacing(10);
+        let column = column![input_bar, settings_bar, states_wrap]
+            .padding(10)
+            .spacing(10);
 
         container(scrollable(column).spacing(10)).padding(10).into()
     }

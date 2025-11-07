@@ -36,13 +36,13 @@ pub fn load_and_save_dmi(
 ) -> Result<(), DMIParsingError> {
     let icon = load_dmi(input_file)?;
     for state in icon.states {
-        if &state.name == name {
-            if let Some(image) = state.images.first() {
-                image
-                    .as_rgba8()
-                    .ok_or(DMIParsingError::ErrorRGBA)?
-                    .save(output_file)?;
-            }
+        if &state.name == name
+            && let Some(image) = state.images.first()
+        {
+            image
+                .as_rgba8()
+                .ok_or(DMIParsingError::ErrorRGBA)?
+                .save(output_file)?;
         }
     }
     Ok(())
