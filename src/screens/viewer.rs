@@ -508,9 +508,7 @@ impl Screen for ViewerScreen {
 
                                 #[cfg(target_os = "windows")]
                                 {
-                                    use clipboard_win::{
-                                        Clipboard, Setter, format::*,
-                                    };
+                                    use clipboard_win::Clipboard;
 
                                     let clipboard = Clipboard::new();
 
@@ -521,7 +519,7 @@ impl Screen for ViewerScreen {
                                     if let Err(err) = gif_format {
                                         return Task::done(popup(
                                             format!(
-                                                "Failed to copy animated image: {}",
+                                                "Failed to register gif format: {}",
                                                 err
                                             ),
                                             Some("Failed copy"),
@@ -550,7 +548,7 @@ impl Screen for ViewerScreen {
                                     if let Err(err) = file_format {
                                         return Task::done(popup(
                                             format!(
-                                                "Failed to copy animated image: {}",
+                                                "Failed to register file format: {}",
                                                 err
                                             ),
                                             Some("Failed copy"),
@@ -620,9 +618,7 @@ impl Screen for ViewerScreen {
 
                                 #[cfg(target_os = "windows")]
                                 {
-                                    use clipboard_win::{
-                                        Clipboard, Setter, format::*,
-                                    };
+                                    use clipboard_win::Clipboard;
 
                                     let clipboard = Clipboard::new();
 
@@ -633,7 +629,7 @@ impl Screen for ViewerScreen {
                                     if let Err(err) = gif_format {
                                         return Task::done(popup(
                                             format!(
-                                                "Failed to copy animated image: {}",
+                                                "Failed to register gif format: {}",
                                                 err
                                             ),
                                             Some("Failed copy"),
@@ -662,7 +658,7 @@ impl Screen for ViewerScreen {
                                     if let Err(err) = file_format {
                                         return Task::done(popup(
                                             format!(
-                                                "Failed to copy animated image: {}",
+                                                "Failed to register file format: {}",
                                                 err
                                             ),
                                             Some("Failed copy"),
