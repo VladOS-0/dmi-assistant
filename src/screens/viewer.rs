@@ -508,20 +508,13 @@ impl Screen for ViewerScreen {
 
                                 #[cfg(target_os = "windows")]
                                 {
-                                    use clipboard_win::Clipboard;
-
-                                    let clipboard = Clipboard::new();
-
                                     let gif_format =
-                                        clipboard_win::format::register(
+                                        clipboard_win::raw::register_format(
                                             "image/gif",
                                         );
-                                    if let Err(err) = gif_format {
+                                    if let None = gif_format {
                                         return Task::done(popup(
-                                            format!(
-                                                "Failed to register gif format: {}",
-                                                err
-                                            ),
+                                            "Failed to register gif format",
                                             Some("Failed copy"),
                                             ToastLevel::Error,
                                         ));
@@ -529,7 +522,10 @@ impl Screen for ViewerScreen {
                                     let gif_format = gif_format.unwrap();
 
                                     if let Err(err) =
-                                        clipboard.set(gif_format, &image_bytes)
+                                        clipboard_win::set_clipboard(
+                                            gif_format,
+                                            &image_bytes,
+                                        )
                                     {
                                         return Task::done(popup(
                                             format!(
@@ -542,10 +538,10 @@ impl Screen for ViewerScreen {
                                     };
 
                                     let file_format =
-                                        clipboard_win::format::register(
+                                        clipboard_win::raw::register_format(
                                             "FileContents",
                                         );
-                                    if let Err(err) = file_format {
+                                    if let None = file_format {
                                         return Task::done(popup(
                                             format!(
                                                 "Failed to register file format: {}",
@@ -558,7 +554,10 @@ impl Screen for ViewerScreen {
                                     let file_format = file_format.unwrap();
 
                                     if let Err(err) =
-                                        clipboard.set(file_format, &image_bytes)
+                                        clipboard_win::set_clipboard(
+                                            gif_format,
+                                            &image_bytes,
+                                        )
                                     {
                                         return Task::done(popup(
                                             format!(
@@ -618,20 +617,13 @@ impl Screen for ViewerScreen {
 
                                 #[cfg(target_os = "windows")]
                                 {
-                                    use clipboard_win::Clipboard;
-
-                                    let clipboard = Clipboard::new();
-
                                     let gif_format =
-                                        clipboard_win::format::register(
+                                        clipboard_win::raw::register_format(
                                             "image/gif",
                                         );
-                                    if let Err(err) = gif_format {
+                                    if let None = gif_format {
                                         return Task::done(popup(
-                                            format!(
-                                                "Failed to register gif format: {}",
-                                                err
-                                            ),
+                                            "Failed to register gif format",
                                             Some("Failed copy"),
                                             ToastLevel::Error,
                                         ));
@@ -639,7 +631,10 @@ impl Screen for ViewerScreen {
                                     let gif_format = gif_format.unwrap();
 
                                     if let Err(err) =
-                                        clipboard.set(gif_format, &image_bytes)
+                                        clipboard_win::set_clipboard(
+                                            gif_format,
+                                            &image_bytes,
+                                        )
                                     {
                                         return Task::done(popup(
                                             format!(
@@ -652,10 +647,10 @@ impl Screen for ViewerScreen {
                                     };
 
                                     let file_format =
-                                        clipboard_win::format::register(
+                                        clipboard_win::raw::register_format(
                                             "FileContents",
                                         );
-                                    if let Err(err) = file_format {
+                                    if let None = file_format {
                                         return Task::done(popup(
                                             format!(
                                                 "Failed to register file format: {}",
@@ -668,7 +663,10 @@ impl Screen for ViewerScreen {
                                     let file_format = file_format.unwrap();
 
                                     if let Err(err) =
-                                        clipboard.set(file_format, &image_bytes)
+                                        clipboard_win::set_clipboard(
+                                            gif_format,
+                                            &image_bytes,
+                                        )
                                     {
                                         return Task::done(popup(
                                             format!(
