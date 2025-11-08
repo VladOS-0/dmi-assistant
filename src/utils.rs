@@ -200,3 +200,144 @@ pub fn animate(
 
     result.and(Ok(animated))
 }
+
+pub fn copy_image_as_file_contents(
+    image_data: &[u8],
+    _filename: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "windows")]
+    {
+        use clipboard_win::{Clipboard, System, formats};
+
+        Clipboard::new()?;
+
+        let file_format = formats::register("FileContents")?;
+        clipboard_win::raw::set(file_format, image_data)?;
+
+        let filename_format = formats::register("FilenameW")?;
+        let wide_filename: Vec<u16> =
+            _filename.encode_utf16().chain(std::iter::once(0)).collect();
+        clipboard_win::raw::set(filename_format, &wide_filename)?;
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::io::Write;
+        use std::process::Command;
+        use tempfile::NamedTempFile;
+
+        let mut temp_file = NamedTempFile::new()?;
+        temp_file.write_all(image_data)?;
+
+        let output = Command::new("osascript")
+            .arg("-e")
+            .arg(format!(
+                "set the clipboard to (read (POSIX file \"{}\") as {{class:(«class GIF »)}})",
+                temp_file.path().to_str().unwrap()
+            ))
+            .output()?;
+
+        if !output.status.success() {
+            return Err(format!(
+                "macOS copy failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+
+        std::mem::forget(temp_file);
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::io::Write;
+        use std::process::Command;
+        use tempfile::NamedTempFile;
+
+        let mut temp_file = NamedTempFile::new()
+            .map_err(|err| format!("Failed to create a tempfile: {}", err))?;
+        temp_file
+            .write_all(image_data)
+            .map_err(|err| format!("Failed to write to a tempfile: {}", err))?;
+        temp_file
+            .flush()
+            .map_err(|err| format!("Failed to flush a tempfile: {}", err))?;
+
+        let wayland_display = std::env::var("WAYLAND_DISPLAY").is_ok();
+        let x11_display = std::env::var("DISPLAY").is_ok();
+
+        if wayland_display {
+            let output = Command::new("wl-copy")
+                .arg("--type")
+                .arg("image/gif")
+                .arg("--paste-once")
+                .arg(temp_file.path())
+                .output()?;
+
+            if !output.status.success() {
+                let output = Command::new("wl-copy")
+                    .arg("--type")
+                    .arg("image/gif")
+                    .arg(temp_file.path())
+                    .output()?;
+
+                if !output.status.success() {
+                    return Err(format!(
+                        "wl-copy failed: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    )
+                    .into());
+                }
+            }
+        } else if x11_display {
+            let output = Command::new("timeout")
+                .arg("5s")
+                .arg("xclip")
+                .arg("-selection")
+                .arg("clipboard")
+                .arg("-t")
+                .arg("image/gif")
+                .arg("-i")
+                .arg(temp_file.path())
+                .output()?;
+
+            if !output.status.success() {
+                return Err(format!(
+                    "xclip failed or timed out: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                )
+                .into());
+            }
+        } else {
+            // No display server detected
+            return Err(
+                "No display server detected (neither Wayland nor X11)".into()
+            );
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux"
+    )))]
+    {
+        use arboard::{Clipboard, ImageData};
+        use std::borrow::Cow;
+
+        let mut clipboard = Clipboard::new()?;
+
+        clipboard.set_image(ImageData {
+            width: 64,
+            height: 64,
+            bytes: Cow::Borrowed(image_data),
+        })?;
+
+        Ok(())
+    }
+}
