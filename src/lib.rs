@@ -21,6 +21,7 @@ use screens::Screens;
 use screens::viewer::{ViewerMessage, ViewerScreen};
 use utils::cleanup;
 
+#[rustfmt::skip]
 pub mod icon;
 
 pub const DEFAULT_THEME: Theme = Theme::Nightfly;
