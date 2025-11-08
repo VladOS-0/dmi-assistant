@@ -560,10 +560,21 @@ impl Screen for ViewerScreen {
                     if animated {
                         #[cfg(target_os = "windows")]
                         {
-                            clipboard_win::raw::set(
+                            let copy_result = clipboard_win::raw::set(
                                 clipboard_win::formats::CF_DIB,
                                 &image_bytes,
-                            )?;
+                            );
+
+                            if let Err(err) = copy_result {
+                                return Task::done(popup(
+                                    format!(
+                                        "Failed to copy animated image: {}",
+                                        err
+                                    ),
+                                    Some("Failed copy"),
+                                    ToastLevel::Error,
+                                ));
+                            }
 
                             return Task::done(popup(
                                 "Copied image to the clipboard",
