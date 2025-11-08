@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::io::Cursor;
+use std::io::Write;
 use std::time::Instant;
 
 use arboard::Clipboard;
@@ -47,6 +49,7 @@ use iced_gif::Gif;
 use iced_toasts::ToastLevel;
 use image::imageops::FilterType;
 use log::debug;
+use log::error;
 use log::warn;
 use rfd::FileDialog;
 
@@ -477,19 +480,45 @@ impl Screen for ViewerScreen {
                     let image_bytes;
 
                     if animated {
-                        if original {
-                            let anim = state.get_original_frame(&direction, 1);
+                        if original && cfg!(target_os = "windows") {
+                            let anim = state.get_animated(&direction);
                             if let Some(animated) = anim {
-                                image_bytes = animated.as_bytes().to_vec();
+                                let mut buf: Cursor<Vec<u8>> = Cursor::new(
+                                    Vec::with_capacity(animated.bytes.len()),
+                                );
+                                let write_result = buf.write(&animated.bytes);
+
+                                if let Err(err) = write_result {
+                                    {
+                                        error!("Failed to copy image as GIF");
+                                        return Task::done(popup(
+                                            format!(
+                                                "Failed to copy the image as GIF - {}",
+                                                err
+                                            ),
+                                            Some("Failed copy"),
+                                            ToastLevel::Error,
+                                        ));
+                                    }
+                                }
+                                image_bytes = buf.into_inner();
                             } else {
-                                image_bytes = Vec::new();
+                                return Task::done(popup(
+                                    "Failed to get animated image",
+                                    Some("Failed copy"),
+                                    ToastLevel::Error,
+                                ));
                             }
                         } else {
                             let anim = state.get_frame(&direction, 1);
                             if let Some(animated) = anim {
                                 image_bytes = animated.as_bytes().to_vec();
                             } else {
-                                image_bytes = Vec::new();
+                                return Task::done(popup(
+                                    "Failed to get the first frame of animation",
+                                    Some("Failed copy"),
+                                    ToastLevel::Error,
+                                ));
                             }
                         }
                     } else if original {
@@ -498,18 +527,23 @@ impl Screen for ViewerScreen {
                         if let Some(image) = icon {
                             image_bytes = image.clone().into_bytes();
                         } else {
-                            image_bytes = Vec::new();
+                            return Task::done(popup(
+                                "Failed to get original frame",
+                                Some("Failed copy"),
+                                ToastLevel::Error,
+                            ));
                         }
                     } else {
                         let icon = state.get_frame(&direction, frame.unwrap());
                         if let Some(image) = icon {
                             image_bytes = image.clone().into_bytes();
                         } else {
-                            image_bytes = Vec::new();
+                            return Task::done(popup(
+                                "Failed to get resized frame",
+                                Some("Failed copy"),
+                                ToastLevel::Error,
+                            ));
                         }
-                    }
-                    if image_bytes.is_empty() {
-                        return Task::none();
                     }
 
                     let height = if original {
@@ -523,7 +557,21 @@ impl Screen for ViewerScreen {
                     } else {
                         screen.parsed_dmi.displayed_width
                     };
+                    if animated {
+                        #[cfg(target_os = "windows")]
+                        {
+                            clipboard_win::raw::set(
+                                clipboard_win::formats::CF_DIB,
+                                &image_bytes,
+                            )?;
 
+                            return Task::done(popup(
+                                "Copied image to the clipboard",
+                                Some("Copied"),
+                                ToastLevel::Success,
+                            ));
+                        }
+                    }
                     let _ = Clipboard::new().unwrap().set_image(ImageData {
                         width: width as usize,
                         height: height as usize,

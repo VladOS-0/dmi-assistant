@@ -1,0 +1,10 @@
+# This is path to the Config.toml (to this file) *WITH* the file name.
+# Do *NOT* change it, change CONFIG_PATH in the .env instead
+path_to_config_file = 'C:\Users\User\AppData\Local\Vlad0s\DMIAssistant\config\Config.toml'
+
+# Directory for log files. !!DANGER!! BE VERY CAREFUL, APP WILL DELETE FILES IN THIS DIRECTORY TO ROTATE LOGS
+log_dir = 'C:\Users\User\AppData\Roaming\Vlad0s\DMIAssistant\data\logs'
+# Directory for the cached images and whatever. !!DANGER!! BE VERY CAREFUL, APP WILL DELETE THIS ENTIRE DIRECTORY EVERY LAUNCH
+cache_dir = 'C:\Users\User\AppData\Local\Vlad0s\DMIAssistant\cache'
+# Data directory for various stuff
+data_dir = 'C:\Users\User\AppData\Local\Vlad0s\DMIAssistant\data'

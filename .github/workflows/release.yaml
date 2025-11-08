@@ -52,6 +52,13 @@ jobs:
 
           cp target/${{ matrix.target }}/release/$EXECUTABLE_NAME release-assets/
 
+          if [ -f ".env.example" ]; then
+            cp .env.example release-assets/.env
+          else
+            echo ".env.example not found!" >&2
+            exit 1
+          fi
+
           cp README.md LICENSE LICENSE-GPL release-assets/
 
           if [ "${{ matrix.target }}" = "x86_64-pc-windows-gnu" ]; then
@@ -90,7 +97,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          release_name: ${{ github.ref }}
           draft: false
           prerelease: false
 

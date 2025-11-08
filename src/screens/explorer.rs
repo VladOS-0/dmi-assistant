@@ -7,9 +7,10 @@ use std::{
 
 use arboard::Clipboard;
 use iced::{
-    Element, Length, Task,
-    alignment::Vertical,
+    Element, Font, Length, Task,
+    alignment::{Horizontal, Vertical},
     color,
+    font::Weight,
     keyboard::{Key, Modifiers},
     widget::{
         Column, Container, Space, TextInput, button, column, container,
@@ -31,6 +32,8 @@ use crate::{
     wrap,
 };
 
+const DEFAULT_PAGE_SIZE: usize = 50;
+
 #[derive(Debug, Clone)]
 pub enum ExplorerMessage {
     ChangeInputDMIPath(String),
@@ -43,9 +46,10 @@ pub enum ExplorerMessage {
     ClearAll,
     ChangeFilteredText(String),
     ToggleFilter(bool),
+    JumpToPage(usize, usize),
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct ExplorerScreen {
     hovered_file: bool,
     path_in_input: String,
@@ -53,6 +57,8 @@ pub struct ExplorerScreen {
     parsed_dmis: BTreeMap<PathBuf, Vec<String>>,
     filtered_text: String,
     filter_opened: bool,
+    page_size: usize,
+    current_page: usize,
 }
 
 impl ExplorerScreen {
@@ -72,6 +78,21 @@ impl ExplorerScreen {
             .padding(10)
         } else {
             container("")
+        }
+    }
+}
+
+impl Default for ExplorerScreen {
+    fn default() -> Self {
+        Self {
+            hovered_file: false,
+            path_in_input: String::new(),
+            loading_dmis: BTreeSet::new(),
+            parsed_dmis: BTreeMap::new(),
+            filtered_text: String::new(),
+            filter_opened: false,
+            page_size: DEFAULT_PAGE_SIZE,
+            current_page: 0,
         }
     }
 }
@@ -338,10 +359,17 @@ impl Screen for ExplorerScreen {
                     }
                     ExplorerMessage::ChangeFilteredText(new_text) => {
                         screen.filtered_text = new_text;
-                        Task::none()
+                        Task::done(wrap![ExplorerMessage::JumpToPage(0, 0)])
                     }
                     ExplorerMessage::ToggleFilter(status) => {
                         screen.filter_opened = status;
+                        Task::none()
+                    }
+                    ExplorerMessage::JumpToPage(page, displayed_dmis_count) => {
+                        if page <= displayed_dmis_count / screen.page_size {
+                            screen.current_page = page;
+                        }
+
                         Task::none()
                     }
                 }
@@ -456,6 +484,7 @@ impl Screen for ExplorerScreen {
         }
 
         let mut parsed_dmis_column: Column<Message> = Column::new();
+        let mut displayed_dmis_count: usize = 0;
 
         for (path, dmi) in &screen.parsed_dmis {
             let mut dmi_states_column: Column<Message> = Column::new();
@@ -494,6 +523,14 @@ impl Screen for ExplorerScreen {
                 }
             }
             if filter_selected_state || filter_selected_dmi {
+                displayed_dmis_count += 1;
+
+                if displayed_dmis_count / screen.page_size
+                    != screen.current_page
+                {
+                    continue;
+                }
+
                 let selected_mark: text::Rich<Message> = if screen
                     .filtered_text
                     .is_empty()
@@ -529,14 +566,142 @@ impl Screen for ExplorerScreen {
                     ]));
             }
         }
+
+        let upper_page_controls = if displayed_dmis_count > screen.page_size {
+            let zeroth_page_button =
+                button("<<").on_press(wrap![ExplorerMessage::JumpToPage(
+                    0,
+                    displayed_dmis_count
+                )]);
+            let previous_page_button =
+                button("<").on_press(wrap![ExplorerMessage::JumpToPage(
+                    if screen.current_page != 0 {
+                        screen.current_page - 1
+                    } else {
+                        0
+                    },
+                    displayed_dmis_count
+                )]);
+            let next_page_button =
+                button(">").on_press(wrap![ExplorerMessage::JumpToPage(
+                    screen.current_page + 1,
+                    displayed_dmis_count
+                )]);
+            let last_page_button =
+                button(">>").on_press(wrap![ExplorerMessage::JumpToPage(
+                    displayed_dmis_count / screen.page_size,
+                    displayed_dmis_count
+                )]);
+            let page_text = text!(
+                "Viewing {} page from {} | DMIs {} - {} of {}",
+                screen.current_page,
+                displayed_dmis_count / screen.page_size,
+                screen.page_size * screen.current_page,
+                (screen.page_size * screen.current_page + screen.page_size)
+                    .min(displayed_dmis_count),
+                displayed_dmis_count
+            )
+            .font(Font {
+                weight: Weight::Bold,
+                ..Default::default()
+            });
+            container(
+                row![
+                    zeroth_page_button,
+                    previous_page_button,
+                    page_text,
+                    next_page_button,
+                    last_page_button
+                ]
+                .spacing(10)
+                .padding(5)
+                .align_y(Vertical::Center),
+            )
+            .align_x(Horizontal::Center)
+        } else {
+            let dmi_count_text = text!("Viewing {} DMIs", displayed_dmis_count)
+                .font(Font {
+                    weight: Weight::Bold,
+                    ..Default::default()
+                });
+            container(dmi_count_text)
+                .padding(5)
+                .align_y(Vertical::Center)
+                .align_x(Horizontal::Center)
+        };
+
+        let lower_page_controls = if displayed_dmis_count > screen.page_size {
+            let zeroth_page_button =
+                button("<<").on_press(wrap![ExplorerMessage::JumpToPage(
+                    0,
+                    displayed_dmis_count
+                )]);
+            let previous_page_button =
+                button("<").on_press(wrap![ExplorerMessage::JumpToPage(
+                    if screen.current_page != 0 {
+                        screen.current_page - 1
+                    } else {
+                        0
+                    },
+                    displayed_dmis_count
+                )]);
+            let next_page_button =
+                button(">").on_press(wrap![ExplorerMessage::JumpToPage(
+                    screen.current_page + 1,
+                    displayed_dmis_count
+                )]);
+            let last_page_button =
+                button(">>").on_press(wrap![ExplorerMessage::JumpToPage(
+                    displayed_dmis_count / screen.page_size,
+                    displayed_dmis_count
+                )]);
+            let page_text = text!(
+                "Viewing {} page from {} | DMIs {} - {} of {}",
+                screen.current_page,
+                displayed_dmis_count / screen.page_size,
+                screen.page_size * screen.current_page,
+                (screen.page_size * screen.current_page + screen.page_size)
+                    .min(displayed_dmis_count),
+                displayed_dmis_count
+            )
+            .font(Font {
+                weight: Weight::Bold,
+                ..Default::default()
+            });
+            container(
+                row![
+                    zeroth_page_button,
+                    previous_page_button,
+                    page_text,
+                    next_page_button,
+                    last_page_button
+                ]
+                .spacing(10)
+                .padding(5)
+                .align_y(Vertical::Center),
+            )
+            .align_x(Horizontal::Center)
+        } else {
+            let dmi_count_text = text!("Viewing {} DMIs", displayed_dmis_count)
+                .font(Font {
+                    weight: Weight::Bold,
+                    ..Default::default()
+                });
+            container(dmi_count_text)
+                .padding(5)
+                .align_y(Vertical::Center)
+                .align_x(Horizontal::Center)
+        };
+
         container(scrollable(
             column![
                 input_controls,
                 output_controls,
                 screen.filter_view(),
                 Space::with_height(10),
-                row![bold_text("Parsed:    "), Space::with_height(20)],
-                parsed_dmis_column
+                upper_page_controls,
+                parsed_dmis_column,
+                lower_page_controls,
             ]
             .spacing(10),
         ))

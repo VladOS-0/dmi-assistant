@@ -27,12 +27,10 @@ pub fn main() -> iced::Result {
     prepare_dirs(&config);
     panic::set_hook(Box::new(|err| {
         error!(
-            "[THREAD PANICKED!] Location: {} | Payload: {}",
-            err.location()
-                .map(|loc| { loc.to_string() })
-                .unwrap_or("UNKNOWN".to_string()),
-            err.payload().downcast_ref::<String>().unwrap()
-        );
+            "[THREAD PANICKED!] Location: {:?} | Payload: {:?}",
+            err.location(),
+            err.payload()
+        )
     }));
 
     info!(
