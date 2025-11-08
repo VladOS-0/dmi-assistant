@@ -1,3 +1,4 @@
+use arboard::Clipboard;
 use iced::keyboard::{Key, Modifiers};
 use iced::widget::container;
 use iced::window::{Event, Id};
@@ -12,7 +13,6 @@ pub mod dmi_model;
 pub mod dmi_utils;
 pub mod screens;
 pub mod utils;
-pub mod widgets;
 
 use crate::config::Config;
 use crate::screens::Screen;
@@ -41,7 +41,6 @@ pub enum Message {
     ExplorerMessage(ExplorerMessage),
 }
 
-#[derive(Debug)]
 pub struct DMIAssistant<'a> {
     pub config: Config,
 
@@ -52,6 +51,8 @@ pub struct DMIAssistant<'a> {
 
     pub theme: Theme,
     pub toasts: ToastContainer<'a, Message>,
+
+    pub clipboard: Clipboard,
 }
 
 impl DMIAssistant<'_> {
@@ -78,6 +79,7 @@ impl DMIAssistant<'_> {
             explorer_screen,
             theme: Default::default(),
             toasts: toast_container(Message::DismissToast),
+            clipboard: Clipboard::new().unwrap(),
         }
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {

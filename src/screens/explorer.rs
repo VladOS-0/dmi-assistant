@@ -37,8 +37,9 @@ use crate::{
     wrap,
 };
 
-const DEFAULT_PAGE_SIZE: usize = 50;
+const DEFAULT_PAGE_SIZE: usize = 20;
 const DEFAULT_DELIMETER: &str = ", ";
+const DEFAULT_RECURSION_DEPTH: usize = 20;
 
 const MAIN_EXPLORER_SCROLLABLE_ID: &str = "Main Explorer Scrollabe";
 const MAIN_EXPLORER_CONTAINER_ID: &str = "Main Explorer Container";
@@ -69,12 +70,14 @@ pub enum ExplorerMessage {
     ResetSettings,
     ChangePageSize(usize),
     ChangeDelimeter(String),
+    ChangeRecursionDepth(usize),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExplorerSettings {
     pub page_size: usize,
     pub delimeter: String,
+    pub recursion_depth: usize,
 }
 
 impl Default for ExplorerSettings {
@@ -82,6 +85,7 @@ impl Default for ExplorerSettings {
         Self {
             page_size: DEFAULT_PAGE_SIZE,
             delimeter: DEFAULT_DELIMETER.to_string(),
+            recursion_depth: DEFAULT_RECURSION_DEPTH,
         }
     }
 }
@@ -138,7 +142,7 @@ impl Screen for ExplorerScreen {
                     Task::none()
                 }
                 iced::window::Event::FileDropped(path) => {
-                    let path: PathBuf = path
+                    let base_path: PathBuf = path
                         .to_str()
                         .unwrap_or("FAILED TO RESOLVE FILE")
                         .to_owned()
@@ -146,11 +150,11 @@ impl Screen for ExplorerScreen {
 
                     let dummy = PathBuf::new();
 
-                    if path.is_dir() {
+                    if base_path.is_dir() {
                         screen.hovered_file = false;
                         return Task::batch(
-                            WalkDir::new(path)
-                                .max_depth(20)
+                            WalkDir::new(&base_path)
+                                .max_depth(screen.settings.recursion_depth)
                                 .into_iter()
                                 .filter_map(|entry| {
                                     entry
@@ -336,7 +340,9 @@ impl Screen for ExplorerScreen {
                                 if path.is_dir() {
                                     Task::batch(
                                         WalkDir::new(path)
-                                            .max_depth(20)
+                                            .max_depth(
+                                                screen.settings.recursion_depth,
+                                            )
                                             .into_iter()
                                             .filter_map(|entry| {
                                                 entry
@@ -464,6 +470,10 @@ impl Screen for ExplorerScreen {
                         )])
                         .chain(Task::done(wrap![ViewerMessage::LoadDMI])),
                     ]),
+                    ExplorerMessage::ChangeRecursionDepth(depth) => {
+                        screen.settings.recursion_depth = depth;
+                        Task::none()
+                    }
                 }
             }
             _ => Task::none(),
@@ -572,6 +582,20 @@ impl Screen for ExplorerScreen {
             .align_y(Vertical::Center)
             .spacing(5);
 
+            let recusion_depth_picker = row![
+                bold_text("Recursion Depth: "),
+                NumberInput::new(
+                    screen.settings.recursion_depth,
+                    1..=100,
+                    move |new_depth| {
+                        wrap![ExplorerMessage::ChangeRecursionDepth(new_depth)]
+                    },
+                )
+                .step(1)
+            ]
+            .align_y(Vertical::Center)
+            .spacing(5);
+
             let save_settings = button(row![icon::save(), "  Save Settings"])
                 .on_press(wrap![ExplorerMessage::SaveSettings])
                 .style(button::success);
@@ -586,6 +610,7 @@ impl Screen for ExplorerScreen {
             settings_bar = column![
                 page_size_picker,
                 delimeter_picker,
+                recusion_depth_picker,
                 row![save_settings, load_settings, reset_settings].spacing(5)
             ]
             .spacing(10);

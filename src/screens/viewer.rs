@@ -1,12 +1,10 @@
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::fs::OpenOptions;
 use std::io::Cursor;
 use std::io::Write;
 use std::time::Instant;
 
-use arboard::Clipboard;
-use arboard::ImageData;
 use dmi::icon::Icon;
 use iced::Alignment;
 use iced::Background;
@@ -40,15 +38,14 @@ use iced::widget::scrollable::Scrollbar;
 use iced::widget::text;
 use iced::widget::text_input;
 use iced::widget::toggler;
-use iced_aw::ColorPicker;
 use iced_aw::Grid;
 use iced_aw::GridRow;
 use iced_aw::NumberInput;
 use iced_aw::TabLabel;
 use iced_aw::Wrap;
-use iced_aw::color_picker;
 use iced_gif::Gif;
 use iced_toasts::ToastLevel;
+use image::ImageFormat;
 use image::imageops::FilterType;
 use log::debug;
 use log::error;
@@ -90,10 +87,11 @@ pub enum ViewerMessage {
     ChangeFilterType(CustomFilterType),
     PerformResize,
 
+    // Reserved for better times, because color picker is incompatible with toasts at a fundamental level
     ColorPickerOpened(ColorPickerType),
     ColorPickerClosed(ColorPickerType),
     ColorChange(ColorPickerType, Color),
-
+    //
     ChangeFilteredText(String),
     ToggleFilter(bool),
 }
@@ -486,134 +484,154 @@ impl Screen for ViewerScreen {
                     ))
                 }
                 ViewerMessage::CopyImage(
-                    state,
+                    state_name,
                     animated,
                     original,
                     direction,
                     frame,
                 ) => {
-                    let state = screen.parsed_dmi.states.get(&state);
+                    if !animated && frame.is_none() {
+                        error!(
+                            "BUG: requested non-animated image without the frame index"
+                        );
+                        return Task::done(popup(
+                            "BUG: requested non-animated image without the frame index",
+                            Some("Bug!"),
+                            ToastLevel::Error,
+                        ));
+                    }
+
+                    let state = screen.parsed_dmi.states.get(&state_name);
                     if state.is_none() {
-                        return Task::none();
+                        return Task::done(popup(
+                            format!("Failed to get state {}", state_name),
+                            Some("Failed"),
+                            ToastLevel::Error,
+                        ));
                     }
                     let state = state.unwrap();
 
-                    let image_bytes;
+                    let mut file_path = app.config.cache_dir.join(&state_name);
+                    file_path.set_extension(".gif");
 
-                    if animated {
-                        if original && cfg!(target_os = "windows") {
-                            let anim = state.get_animated(&direction);
-                            if let Some(animated) = anim {
-                                let mut buf: Cursor<Vec<u8>> = Cursor::new(
-                                    Vec::with_capacity(animated.bytes.len()),
-                                );
-                                let write_result = buf.write(&animated.bytes);
+                    let temporary_file = OpenOptions::new()
+                        .write(true)
+                        .truncate(true)
+                        .create(true)
+                        .open(&file_path);
+                    if let Err(err) = temporary_file {
+                        error!(
+                            "Failed to create a temporary file in {}: {}",
+                            file_path.to_string_lossy(),
+                            err
+                        );
+                        return Task::done(popup(
+                            format!(
+                                "Failed to create a temporary file in {}: {}",
+                                file_path.to_string_lossy(),
+                                err
+                            ),
+                            Some("Failed"),
+                            ToastLevel::Error,
+                        ));
+                    }
+                    let mut temporary_file = temporary_file.unwrap();
 
-                                if let Err(err) = write_result {
-                                    {
-                                        error!("Failed to copy image as GIF");
-                                        return Task::done(popup(
-                                            format!(
-                                                "Failed to copy the image as GIF - {}",
-                                                err
-                                            ),
-                                            Some("Failed copy"),
-                                            ToastLevel::Error,
-                                        ));
-                                    }
-                                }
-                                image_bytes = buf.into_inner();
-                            } else {
-                                return Task::done(popup(
-                                    "Failed to get animated image",
-                                    Some("Failed copy"),
-                                    ToastLevel::Error,
-                                ));
-                            }
-                        } else {
-                            return Task::done(popup(
-                                "Animated copy is not supported on non-Windows platforms (and on Windows it is probably broken too)",
-                                Some("Boowomp"),
-                                ToastLevel::Error,
-                            ));
-                        }
-                    } else if original {
-                        let icon = state
-                            .get_original_frame(&direction, frame.unwrap());
-                        if let Some(image) = icon {
-                            image_bytes = image.clone().into_bytes();
-                        } else {
-                            return Task::done(popup(
-                                "Failed to get original frame",
-                                Some("Failed copy"),
-                                ToastLevel::Error,
-                            ));
-                        }
-                    } else {
-                        let icon = state.get_frame(&direction, frame.unwrap());
-                        if let Some(image) = icon {
-                            image_bytes = image.clone().into_bytes();
-                        } else {
-                            return Task::done(popup(
-                                "Failed to get resized frame",
-                                Some("Failed copy"),
-                                ToastLevel::Error,
-                            ));
-                        }
+                    let gif_data = match (animated, original) {
+                        (true, true) => state.get_original_animated(&direction).ok_or_else(|| {
+                            format!(
+                                "failed to get original animated view of state {} with direction {}",
+                                &state_name,
+                                direction
+                            )
+                        }).map(|animated| animated.bytes.clone()),
+
+                        (true, false) => state.get_animated(&direction).ok_or_else(|| {
+                            format!(
+                                "failed to get animated view of state {} with direction {}",
+                                &state_name,
+                                direction
+                            )
+                        }).map(|animated| animated.bytes.clone()),
+
+                        (false, true) => state.get_original_frame(&direction, frame.unwrap()).ok_or_else(|| {
+                            format!(
+                                "failed to get original {} frame of state {} with direction {}",
+                                frame.unwrap(),
+                                &state_name,
+                                direction
+                            )
+                        }).map(|image| {
+                            let mut buf = Cursor::new(Vec::new());
+                            let _ = image.write_to(&mut buf, ImageFormat::Gif);
+                            buf.into_inner()
+                        }),
+                        (false, false) => state.get_frame(&direction, frame.unwrap()).ok_or_else(|| {
+                            format!(
+                                "failed to get {} frame of state {} with direction {}",
+                                frame.unwrap(),
+                                &state_name,
+                                direction
+                            )
+                        }).map(|image| {
+                            let mut buf = Cursor::new(Vec::new());
+                            let _ = image.write_to(&mut buf, ImageFormat::Gif);
+                            buf.into_inner()
+                        }),
+                    };
+                    if let Err(err) = gif_data {
+                        error!("Failed to parse image into bytes: {}", err);
+                        return Task::done(popup(
+                            format!(
+                                "Failed to parse image into bytes: {}",
+                                err
+                            ),
+                            Some("Failed"),
+                            ToastLevel::Error,
+                        ));
+                    }
+                    let gif_data = gif_data.unwrap();
+
+                    if let Err(err) = temporary_file.write_all(&gif_data) {
+                        error!(
+                            "Failed to write image bytes into the temporary file {}: {}",
+                            file_path.to_string_lossy(),
+                            err
+                        );
+                        return Task::done(popup(
+                            format!(
+                                "Failed to write image bytes into the temporary file {}: {}",
+                                file_path.to_string_lossy(),
+                                err
+                            ),
+                            Some("Failed"),
+                            ToastLevel::Error,
+                        ));
                     }
 
-                    let height = if original {
-                        screen.parsed_dmi.original_height
-                    } else {
-                        screen.parsed_dmi.displayed_height
-                    };
-
-                    let width = if original {
-                        screen.parsed_dmi.original_width
-                    } else {
-                        screen.parsed_dmi.displayed_width
-                    };
-                    if animated {
-                        #[cfg(target_os = "windows")]
-                        {
-                            let copy_result = clipboard_win::raw::set(
-                                clipboard_win::formats::CF_DIF,
-                                &image_bytes,
+                    match app.clipboard.set().file_list(&[&file_path]) {
+                        Ok(()) => Task::done(popup(
+                            "Copied image to the clipboard",
+                            Some("Copied"),
+                            ToastLevel::Success,
+                        )),
+                        Err(err) => {
+                            error!(
+                                "Failed to copy temporary file {} to the clipboard: {}",
+                                file_path.to_string_lossy(),
+                                err
                             );
-
-                            if let Err(err) = copy_result {
-                                error!(
-                                    "Failed to copy animated image: {}",
+                            Task::done(popup(
+                                format!(
+                                    "Failed to copy temporary file {} to the clipboard: {}",
+                                    file_path.to_string_lossy(),
                                     err
-                                );
-                                return Task::done(popup(
-                                    format!(
-                                        "Failed to copy animated image: {}",
-                                        err
-                                    ),
-                                    Some("Failed copy"),
-                                    ToastLevel::Error,
-                                ));
-                            }
-
-                            return Task::done(popup(
-                                "Copied image to the clipboard",
-                                Some("Copied"),
-                                ToastLevel::Success,
-                            ));
+                                ),
+                                Some("Failed"),
+                                ToastLevel::Error,
+                            ))
                         }
                     }
-                    let _ = Clipboard::new().unwrap().set_image(ImageData {
-                        width: width as usize,
-                        height: height as usize,
-                        bytes: Cow::Borrowed(&image_bytes),
-                    });
-
-                    Task::done(popup(
-                        "Copied image to the clipboard",
-                        Some("Copied"),
-                        ToastLevel::Success,
-                    ))
                 }
                 ViewerMessage::ChangeFilteredText(new_text) => {
                     screen.filtered_text = new_text;
@@ -748,47 +766,6 @@ impl Screen for ViewerScreen {
          */
         let mut settings_bar: Column<Message> = Column::new();
         if screen.settings_visible {
-            let stateboxes_color_picker: ColorPicker<Message> = color_picker(
-                screen.color_picker_statebox_visible,
-                screen.display_settings.statebox_default.background_color,
-                Button::new(row![
-                    icon::palette(),
-                    text(" Set Stateboxes Color")
-                ])
-                .on_press(wrap![
-                    ViewerMessage::ColorPickerOpened(
-                        ColorPickerType::DefaultStateboxColor
-                    )
-                ]),
-                wrap![ViewerMessage::ColorPickerClosed(
-                    ColorPickerType::DefaultStateboxColor
-                )],
-                |color| {
-                    wrap![ViewerMessage::ColorChange(
-                        ColorPickerType::DefaultStateboxColor,
-                        color
-                    )]
-                },
-            );
-
-            let text_color_picker: ColorPicker<Message> = color_picker(
-                screen.color_picker_text_visible,
-                screen.display_settings.statebox_default.background_color,
-                Button::new(row![icon::text_cursor(), text(" Set Text Color")])
-                    .on_press(wrap![ViewerMessage::ColorPickerOpened(
-                        ColorPickerType::DefaultTextColor
-                    )]),
-                wrap![ViewerMessage::ColorPickerClosed(
-                    ColorPickerType::DefaultTextColor
-                )],
-                |color| {
-                    wrap![ViewerMessage::ColorChange(
-                        ColorPickerType::DefaultTextColor,
-                        color
-                    )]
-                },
-            );
-
             let debug_info_toggler: Toggler<Message> =
                 toggler(screen.display_settings.statebox_default.debug)
                     .label("Debug Info")
@@ -901,7 +878,6 @@ impl Screen for ViewerScreen {
                     .style(button::danger);
 
             settings_bar = column![
-                row![stateboxes_color_picker, text_color_picker].spacing(10),
                 debug_info_toggler,
                 animated_toggler,
                 resizing_display_toggler,
