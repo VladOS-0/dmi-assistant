@@ -5,6 +5,7 @@ use std::io::Cursor;
 use std::io::Write;
 use std::time::Instant;
 
+use arboard::Clipboard;
 use dmi::icon::Icon;
 use iced::Alignment;
 use iced::Background;
@@ -19,6 +20,7 @@ use iced::alignment::Vertical;
 use iced::border::Radius;
 use iced::keyboard::Key;
 use iced::keyboard::Modifiers;
+use iced::widget;
 use iced::widget::Button;
 use iced::widget::Column;
 use iced::widget::Container;
@@ -74,6 +76,7 @@ pub enum ViewerMessage {
     DMILoaded(Result<(Icon, ParsedDMI), String>),
     OpenedFileExplorer,
     CopyImage(String, bool, bool, Directions, Option<usize>),
+    CopyFile,
 
     ToggleSettingsVisibility(bool),
     SaveSettings,
@@ -609,29 +612,55 @@ impl Screen for ViewerScreen {
                         ));
                     }
 
-                    match app.clipboard.set().file_list(&[&file_path]) {
-                        Ok(()) => Task::done(popup(
-                            "Copied image to the clipboard",
-                            Some("Copied"),
-                            ToastLevel::Success,
-                        )),
-                        Err(err) => {
-                            error!(
-                                "Failed to copy temporary file {} to the clipboard: {}",
+                    let clipboard = match &mut app.clipboard {
+                        Some(clipboard) => clipboard,
+                        None => {
+                            let clipboard_creation_result = Clipboard::new();
+                            match clipboard_creation_result {
+                                Ok(clipboard) => {
+                                    app.clipboard = Some(clipboard);
+                                    app.clipboard.as_mut().unwrap()
+                                }
+                                Err(err) => {
+                                    error!(
+                                        "Failed to obtain access to the clipboard: {}",
+                                        err
+                                    );
+                                    return Task::done(popup(
+                                        format!(
+                                            "Failed to obtain access to the clipboard: {}",
+                                            err
+                                        ),
+                                        Some("Clipoard inaccessible"),
+                                        ToastLevel::Error,
+                                    ));
+                                }
+                            }
+                        }
+                    };
+
+                    if let Err(err) = clipboard.set().file_list(&[&file_path]) {
+                        error!(
+                            "Failed to copy the temporary file {} to the clipboard: {}",
+                            file_path.to_string_lossy(),
+                            err
+                        );
+                        return Task::done(popup(
+                            format!(
+                                "Failed to copy the temporary file {} to the clipboard: {}",
                                 file_path.to_string_lossy(),
                                 err
-                            );
-                            Task::done(popup(
-                                format!(
-                                    "Failed to copy temporary file {} to the clipboard: {}",
-                                    file_path.to_string_lossy(),
-                                    err
-                                ),
-                                Some("Failed"),
-                                ToastLevel::Error,
-                            ))
-                        }
+                            ),
+                            Some("Failed"),
+                            ToastLevel::Error,
+                        ));
                     }
+
+                    Task::done(popup(
+                        "Copied image to the clipboard",
+                        Some("Copied"),
+                        ToastLevel::Success,
+                    ))
                 }
                 ViewerMessage::ChangeFilteredText(new_text) => {
                     screen.filtered_text = new_text;
@@ -669,6 +698,63 @@ impl Screen for ViewerScreen {
                     Task::done(popup(
                         "Settings were reset to default",
                         Some("Reset"),
+                        ToastLevel::Success,
+                    ))
+                }
+                ViewerMessage::CopyFile => {
+                    if screen.dmi_path.is_empty() {
+                        return Task::done(popup(
+                            "DMI path is empty",
+                            Some("Empty path"),
+                            ToastLevel::Error,
+                        ));
+                    }
+                    let clipboard = match &mut app.clipboard {
+                        Some(clipboard) => clipboard,
+                        None => {
+                            let clipboard_creation_result = Clipboard::new();
+                            match clipboard_creation_result {
+                                Ok(clipboard) => {
+                                    app.clipboard = Some(clipboard);
+                                    app.clipboard.as_mut().unwrap()
+                                }
+                                Err(err) => {
+                                    error!(
+                                        "Failed to obtain access to the clipboard: {}",
+                                        err
+                                    );
+                                    return Task::done(popup(
+                                        format!(
+                                            "Failed to obtain access to the clipboard: {}",
+                                            err
+                                        ),
+                                        Some("Clipoard inaccessible"),
+                                        ToastLevel::Error,
+                                    ));
+                                }
+                            }
+                        }
+                    };
+
+                    if let Err(err) =
+                        clipboard.set().file_list(&[&screen.dmi_path])
+                    {
+                        error!(
+                            "Failed to copy the DMI file path {} to the clipboard: {}",
+                            screen.dmi_path, err
+                        );
+                        return Task::done(popup(
+                            format!(
+                                "Failed to copy the DMI file path {} to the clipboard: {}",
+                                screen.dmi_path, err
+                            ),
+                            Some("Failed"),
+                            ToastLevel::Error,
+                        ));
+                    }
+                    Task::done(popup(
+                        "DMI file path was copied to the clipboard",
+                        Some("Copied"),
                         ToastLevel::Success,
                     ))
                 }
@@ -757,7 +843,11 @@ impl Screen for ViewerScreen {
                 .spacing(10)
                 .align_y(Vertical::Center)
                 .padding(5);
-        let bottom_bar = row![button_search].spacing(10).padding(5);
+        // TODO: make DMI Option<> and refactor all this stuff
+        let copy_image = button(row![icon::folder(), text(" Copy DMI")])
+            .on_press(wrap![ViewerMessage::CopyFile])
+            .style(widget::button::success);
+        let bottom_bar = row![button_search, copy_image].spacing(10).padding(5);
 
         /*
          *

@@ -52,8 +52,9 @@ pub enum ExplorerMessage {
     LoadDMI(PathBuf),
     DMILoaded((PathBuf, Result<Vec<String>, String>)),
 
-    CopyDMI(PathBuf),
+    CopyAllDMIText(PathBuf),
     CopyText(String),
+    CopyFile(PathBuf),
     OpenInViewer(PathBuf),
 
     RemoveDMI(PathBuf),
@@ -274,7 +275,7 @@ impl Screen for ExplorerScreen {
                             ToastLevel::Success,
                         ))
                     }
-                    ExplorerMessage::CopyDMI(path) => {
+                    ExplorerMessage::CopyAllDMIText(path) => {
                         let states = screen
                             .parsed_dmis
                             .get(&path)
@@ -473,6 +474,60 @@ impl Screen for ExplorerScreen {
                     ExplorerMessage::ChangeRecursionDepth(depth) => {
                         screen.settings.recursion_depth = depth;
                         Task::none()
+                    }
+
+                    ExplorerMessage::CopyFile(dmi_path) => {
+                        let clipboard = match &mut app.clipboard {
+                            Some(clipboard) => clipboard,
+                            None => {
+                                let clipboard_creation_result =
+                                    Clipboard::new();
+                                match clipboard_creation_result {
+                                    Ok(clipboard) => {
+                                        app.clipboard = Some(clipboard);
+                                        app.clipboard.as_mut().unwrap()
+                                    }
+                                    Err(err) => {
+                                        error!(
+                                            "Failed to obtain access to the clipboard: {}",
+                                            err
+                                        );
+                                        return Task::done(popup(
+                                            format!(
+                                                "Failed to obtain access to the clipboard: {}",
+                                                err
+                                            ),
+                                            Some("Clipoard inaccessible"),
+                                            ToastLevel::Error,
+                                        ));
+                                    }
+                                }
+                            }
+                        };
+
+                        if let Err(err) =
+                            clipboard.set().file_list(&[&dmi_path])
+                        {
+                            error!(
+                                "Failed to copy the DMI file path {} to the clipboard: {}",
+                                dmi_path.to_string_lossy(),
+                                err
+                            );
+                            return Task::done(popup(
+                                format!(
+                                    "Failed to copy the DMI file path {} to the clipboard: {}",
+                                    dmi_path.to_string_lossy(),
+                                    err
+                                ),
+                                Some("Failed"),
+                                ToastLevel::Error,
+                            ));
+                        }
+                        Task::done(popup(
+                            "DMI file path was copied to the clipboard",
+                            Some("Copied"),
+                            ToastLevel::Success,
+                        ))
                     }
                 }
             }
@@ -729,10 +784,17 @@ impl Screen for ExplorerScreen {
                                     path.clone()
                                 )])
                                 .style(button::success),
-                            button(row![icon::save(), text(" Copy All")])
-                                .on_press(wrap![ExplorerMessage::CopyDMI(
+                            button(row![icon::folder(), text(" Copy DMI")])
+                                .on_press(wrap![ExplorerMessage::CopyFile(
                                     path.clone()
-                                )]),
+                                )])
+                                .style(widget::button::success),
+                            button(row![icon::save(), text(" Copy All")])
+                                .on_press(wrap![
+                                    ExplorerMessage::CopyAllDMIText(
+                                        path.clone()
+                                    )
+                                ]),
                             button(row![icon::save(), text(" Copy Path")])
                                 .on_press(wrap![ExplorerMessage::CopyText(
                                     path.to_string_lossy().to_string()
@@ -744,7 +806,7 @@ impl Screen for ExplorerScreen {
                                 )])
                                 .style(button::danger),
                         ]
-                        .spacing(4),
+                        .spacing(8),
                         dmi_states_column,
                         Space::with_height(20)
                     ]));

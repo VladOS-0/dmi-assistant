@@ -7,6 +7,7 @@ use iced::{Length, Theme};
 use iced_aw::time_picker::Status;
 use iced_aw::{Tabs, tab_bar};
 use iced_toasts::{Toast, ToastContainer, ToastId, toast_container};
+use log::error;
 
 pub mod config;
 pub mod dmi_model;
@@ -52,7 +53,7 @@ pub struct DMIAssistant<'a> {
     pub theme: Theme,
     pub toasts: ToastContainer<'a, Message>,
 
-    pub clipboard: Clipboard,
+    pub clipboard: Option<Clipboard>,
 }
 
 impl DMIAssistant<'_> {
@@ -79,7 +80,11 @@ impl DMIAssistant<'_> {
             explorer_screen,
             theme: Default::default(),
             toasts: toast_container(Message::DismissToast),
-            clipboard: Clipboard::new().unwrap(),
+            clipboard: Clipboard::new()
+                .inspect_err(|err| {
+                    error!("Failed to obtain access to the clipboard: {}", err)
+                })
+                .ok(),
         }
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
