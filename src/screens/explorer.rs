@@ -574,7 +574,7 @@ impl Screen for ExplorerScreen {
                 !screen.filter_opened
             )]);
 
-        let button_load = button(row![icon::open(), text(" Open File")])
+        let button_load = button(row![icon::file(), text(" Open File")])
             .on_press(wrap![ExplorerMessage::LoadDMI(
                 screen.path_in_input.clone().into()
             )]);
@@ -604,7 +604,8 @@ impl Screen for ExplorerScreen {
         let mut settings_bar: Column<Message> = Column::new();
         if screen.settings_visible {
             let page_size_picker = row![
-                bold_text("Page Size: "),
+                icon::file(),
+                text(" Page Size: "),
                 NumberInput::new(
                     screen.settings.page_size,
                     10..=200,
@@ -618,7 +619,8 @@ impl Screen for ExplorerScreen {
             .spacing(5);
 
             let delimeter_picker = row![
-                bold_text("Delimeter For Copy All: "),
+                icon::resize_width(),
+                text(" Delimeter For Copy All: "),
                 container(
                     text_input(
                         "Enter the delimeter...",
@@ -638,7 +640,8 @@ impl Screen for ExplorerScreen {
             .spacing(5);
 
             let recusion_depth_picker = row![
-                bold_text("Recursion Depth: "),
+                icon::folder(),
+                text(" Recursion Depth: "),
                 NumberInput::new(
                     screen.settings.recursion_depth,
                     1..=100,
@@ -651,14 +654,14 @@ impl Screen for ExplorerScreen {
             .align_y(Vertical::Center)
             .spacing(5);
 
-            let save_settings = button(row![icon::save(), "  Save Settings"])
+            let save_settings = button(row![icon::save(), " Save Settings"])
                 .on_press(wrap![ExplorerMessage::SaveSettings])
                 .style(button::success);
             let load_settings =
-                button(row![icon::folder(), "  Reset Settings to Config"])
+                button(row![icon::folder(), " Reset Settings to Config"])
                     .on_press(wrap![ExplorerMessage::LoadSettings]);
             let reset_settings =
-                button(row![icon::trash(), "  Reset Settings to Default"])
+                button(row![icon::trash(), " Reset Settings to Default"])
                     .on_press(wrap![ExplorerMessage::ResetSettings])
                     .style(button::danger);
 

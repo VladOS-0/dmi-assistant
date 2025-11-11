@@ -27,12 +27,11 @@ use iced::widget::Container;
 use iced::widget::Image;
 use iced::widget::Scrollable;
 use iced::widget::Space;
-use iced::widget::Toggler;
 use iced::widget::button;
 use iced::widget::column;
 use iced::widget::container;
 use iced::widget::container::Style;
-use iced::widget::pick_list;
+use iced::widget::radio;
 use iced::widget::row;
 use iced::widget::scrollable;
 use iced::widget::scrollable::Direction;
@@ -821,7 +820,7 @@ impl Screen for ViewerScreen {
             .padding(10);
 
         let button_load: Button<Message> =
-            button(row![icon::open(), text(" Open File")])
+            button(row![icon::file(), text(" Open File")])
                 .on_press(wrap![ViewerMessage::LoadDMI]);
 
         let button_explorer: Button<Message> =
@@ -856,41 +855,50 @@ impl Screen for ViewerScreen {
          */
         let mut settings_bar: Column<Message> = Column::new();
         if screen.settings_visible {
-            let debug_info_toggler: Toggler<Message> =
+            let debug_info_toggler = row![
+                row![icon::info(), text(" ")],
                 toggler(screen.display_settings.statebox_default.debug)
                     .label("Debug Info")
                     .on_toggle(|state| {
                         wrap![ViewerMessage::ToggleDebug(state)]
-                    });
+                    })
+            ];
 
-            let animated_toggler: Toggler<Message> =
+            let animated_toggler = row![
+                row![icon::video(), text(" ")],
                 toggler(screen.display_settings.statebox_default.animated)
                     .label("Animated View")
                     .on_toggle(|state| {
                         wrap![ViewerMessage::ToggleAnimated(state)]
-                    });
-            let resizing_display_toggler: Toggler<Message> =
+                    })
+            ];
+            let resizing_display_toggler = row![
+                row![icon::magnifying(), text(" ")],
                 toggler(screen.display_settings.statebox_default.show_resized)
                     .label("Show resized images")
                     .on_toggle(|state| {
                         wrap![ViewerMessage::ToggleResizeDisplay(state)]
-                    });
-            let resize_toggler: Toggler<Message> = toggler(
-                screen.display_settings.statebox_default.resize
-                    != StateboxResizing::Original,
-            )
-            .label("Resize images")
-            .on_toggle(|state| {
-                if state {
-                    wrap![ViewerMessage::ChangeResize(
-                        StateboxResizing::default()
-                    )]
-                } else {
-                    wrap![ViewerMessage::ChangeResize(
-                        StateboxResizing::Original
-                    )]
-                }
-            });
+                    })
+            ];
+            let resize_toggler = row![
+                row![icon::resize2(), text(" ")],
+                toggler(
+                    screen.display_settings.statebox_default.resize
+                        != StateboxResizing::Original,
+                )
+                .label("Resize images")
+                .on_toggle(|state| {
+                    if state {
+                        wrap![ViewerMessage::ChangeResize(
+                            StateboxResizing::default()
+                        )]
+                    } else {
+                        wrap![ViewerMessage::ChangeResize(
+                            StateboxResizing::Original
+                        )]
+                    }
+                })
+            ];
             let resize_picker = match screen
                 .display_settings
                 .statebox_default
@@ -927,25 +935,52 @@ impl Screen for ViewerScreen {
                         CustomFilterType::Lanczos3,
                     ];
 
-                    let filter_type_picker = pick_list(
-                        filter_types,
-                        screen.display_settings.statebox_default.filter_type,
-                        |filter_type| {
-                            wrap![ViewerMessage::ChangeFilterType(filter_type)]
-                        },
-                    )
-                    .placeholder("Select filter type...");
+                    let mut filter_type_picker: Column<Message> = filter_types
+                        .iter()
+                        .map(|filter| {
+                            radio(
+                                filter.to_string(),
+                                filter,
+                                screen
+                                    .display_settings
+                                    .statebox_default
+                                    .filter_type
+                                    .as_ref(),
+                                |filter| {
+                                    wrap![ViewerMessage::ChangeFilterType(
+                                        *filter
+                                    )]
+                                },
+                            )
+                            .into()
+                        })
+                        .collect();
+                    filter_type_picker = column![
+                        bold_text("Resize Filter:"),
+                        filter_type_picker.spacing(5)
+                    ]
+                    .spacing(5);
+
+                    let resize_button: Button<Message> =
+                        button(row![icon::resize(), " Perform Resize"])
+                            .on_press(wrap![ViewerMessage::PerformResize])
+                            .style(widget::button::success);
 
                     container(
                         column![
+                            resize_button,
                             row![
-                                text("Resize up to height: "),
+                                icon::resize_height(),
+                                text(" Resize up to height: "),
                                 height_number_picker
-                            ],
+                            ]
+                            .align_y(Alignment::Center),
                             row![
-                                text("Resize up to width: "),
+                                icon::resize_width(),
+                                text(" Resize up to width: "),
                                 width_number_picker
-                            ],
+                            ]
+                            .align_y(Alignment::Center),
                             filter_type_picker
                         ]
                         .spacing(10),
@@ -953,17 +988,14 @@ impl Screen for ViewerScreen {
                 }
             };
 
-            let resize_button: Button<Message> =
-                button("Resize").on_press(wrap![ViewerMessage::PerformResize]);
-
-            let save_settings = button(row![icon::save(), "  Save Settings"])
+            let save_settings = button(row![icon::save(), " Save Settings"])
                 .on_press(wrap![ViewerMessage::SaveSettings])
                 .style(button::success);
             let load_settings =
-                button(row![icon::folder(), "  Reset Settings to Config"])
+                button(row![icon::folder(), " Reset Settings to Config"])
                     .on_press(wrap![ViewerMessage::LoadSettings]);
             let reset_settings =
-                button(row![icon::trash(), "  Reset Settings to Default"])
+                button(row![icon::trash(), " Reset Settings to Default"])
                     .on_press(wrap![ViewerMessage::ResetSettings])
                     .style(button::danger);
 
@@ -973,7 +1005,6 @@ impl Screen for ViewerScreen {
                 resizing_display_toggler,
                 resize_toggler,
                 resize_picker,
-                resize_button,
                 row![save_settings, load_settings, reset_settings].spacing(5)
             ]
             .spacing(10);
